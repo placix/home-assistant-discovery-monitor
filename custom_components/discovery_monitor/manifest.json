@@ -1,0 +1,21 @@
+{
+  "domain": "discovery_monitor",
+  "name": "Discovery Monitor",
+  "after_dependencies": [
+    "bluetooth",
+    "dhcp",
+    "homekit",
+    "mqtt",
+    "ssdp",
+    "usb",
+    "zeroconf"
+  ],
+  "codeowners": ["@placix"],
+  "config_flow": true,
+  "documentation": "https://github.com/placix/home-assistant-discovery-monitor",
+  "integration_type": "service",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/placix/home-assistant-discovery-monitor/issues",
+  "requirements": [],
+  "version": "0.2.0"
+}

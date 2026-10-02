@@ -1,0 +1,38 @@
+[project]
+name = "home-assistant-discovery-monitor"
+version = "0.2.0"
+description = "Expose detailed Home Assistant discovery config flows as safe events"
+readme = "README.md"
+requires-python = ">=3.14.2"
+license = "MIT"
+authors = [{ name = "placix" }]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.14",
+]
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers --cov=custom_components.discovery_monitor --cov-report=term-missing"
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+
+[tool.ruff]
+target-version = "py314"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+  "ANN401",
+  "COM812",
+  "CPY001",
+  "D203",
+  "D213",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["ARG001", "D", "PLR0913", "PLR2004", "S101", "S105", "S106", "SLF001"]

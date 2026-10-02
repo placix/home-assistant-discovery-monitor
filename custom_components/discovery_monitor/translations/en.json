@@ -1,0 +1,44 @@
+{
+  "title": "Discovery Monitor",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Discovery Monitor",
+        "description": "Set up Discovery Monitor. It does not create entities."
+      }
+    },
+    "abort": {
+      "already_configured": "Discovery Monitor is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Ignored devices and device types",
+        "description": "Select an item to allow matching future discoveries again. Historical records are retained.",
+        "data": {
+          "ignored_item": "Stop ignoring"
+        }
+      }
+    }
+  },
+  "issues": {
+    "discovery_found": {
+      "fix_flow": {
+        "abort": {
+          "identity_unavailable": "No sufficiently stable identification is available for this choice."
+        },
+        "step": {
+          "init": {
+            "data": {
+              "action": "Future handling"
+            },
+            "description": "Only choices based on sufficiently stable information are shown.",
+            "title": "Ignore discovery"
+          }
+        }
+      },
+      "title": "New discovery: {name}"
+    }
+  }
+}
