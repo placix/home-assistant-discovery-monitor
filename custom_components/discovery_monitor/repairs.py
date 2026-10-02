@@ -66,7 +66,9 @@ class DiscoveryRepairFlow(RepairsFlow):
         if self._data.get("can_ignore_type") == "1":
             choices[DEVICE_TYPE] = "Diesen Gerätetyp zukünftig ignorieren"
 
-        if user_input is not None:
+        # The repairs manager passes {"issue_id": ...} to the initial step.
+        # Only treat input as a submitted form once an action is present.
+        if user_input is not None and "action" in user_input:
             monitor = self.hass.data.get(DOMAIN)
             storage = getattr(monitor, "storage", None)
             finding_id = self._data.get("finding_id")
