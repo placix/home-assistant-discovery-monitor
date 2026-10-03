@@ -16,6 +16,8 @@ from .identity import DEVICE, DEVICE_TYPE, criteria_match
 
 _STORAGE_KEY = f"{DOMAIN}.data"
 _STORAGE_VERSION = 1
+_FINDING_SAVE_DELAY = 1.0
+MAX_FINDINGS = 100
 
 
 class DiscoveryStore:
@@ -29,6 +31,7 @@ class DiscoveryStore:
         self._lock = asyncio.Lock()
         self.rules: list[dict[str, Any]] = []
         self.findings: dict[str, dict[str, Any]] = {}
+        self._active_flow_ids: dict[str, str] = {}
 
     async def async_load(self) -> None:
         """Load persisted state."""
@@ -43,6 +46,7 @@ class DiscoveryStore:
                 for key, value in findings.items()
                 if isinstance(value, Mapping)
             }
+        self._trim_findings()
 
     def matching_rule(
         self,
@@ -65,6 +69,7 @@ class DiscoveryStore:
         device: Mapping[str, Any] | None,
         device_type: Mapping[str, Any] | None,
         fallback: Mapping[str, Any],
+        flow_id: str,
     ) -> str:
         """Insert a finding or update its last occurrence and count."""
         async with self._lock:
@@ -97,12 +102,20 @@ class DiscoveryStore:
                     "device_criteria": dict(device) if device else None,
                     "type_criteria": dict(device_type) if device_type else None,
                 }
-            await self._async_save()
+            self._active_flow_ids[finding_id] = flow_id
+            self._trim_findings()
+            self._store.async_delay_save(self._data_to_save, _FINDING_SAVE_DELAY)
         return finding_id
+
+    def active_flow_id(self, finding_id: str) -> str | None:
+        """Return the most recent in-progress flow associated with a finding."""
+        return self._active_flow_ids.get(finding_id)
 
     async def async_add_rule(self, finding_id: str, kind: str) -> bool:
         """Create a rule from a logged finding if that identity is safe."""
         async with self._lock:
+            if kind not in {DEVICE, DEVICE_TYPE}:
+                return False
             finding = self.findings.get(finding_id)
             field = "device_criteria" if kind == DEVICE else "type_criteria"
             if finding is None or not isinstance(
@@ -112,9 +125,7 @@ class DiscoveryStore:
             rule = {
                 "kind": kind,
                 "criteria": dict(criteria),
-                "label": str(
-                    finding.get("label") or finding.get("domain") or "Gerät"
-                ),
+                "label": str(finding.get("label") or finding.get("domain") or "Gerät"),
                 "created_at": datetime.now(UTC).isoformat(),
             }
             if not any(
@@ -130,9 +141,7 @@ class DiscoveryStore:
         """Remove the selected rule without touching history."""
         async with self._lock:
             old_length = len(self.rules)
-            self.rules = [
-                rule for rule in self.rules if self.rule_id(rule) != rule_id
-            ]
+            self.rules = [rule for rule in self.rules if self.rule_id(rule) != rule_id]
             if len(self.rules) == old_length:
                 return False
             await self._async_save()
@@ -145,7 +154,23 @@ class DiscoveryStore:
 
     async def _async_save(self) -> None:
         """Persist all state using Home Assistant storage."""
-        await self._store.async_save({"rules": self.rules, "findings": self.findings})
+        await self._store.async_save(self._data_to_save())
+
+    def _data_to_save(self) -> dict[str, Any]:
+        """Return current persistent state for immediate or delayed writes."""
+        return {"rules": self.rules, "findings": self.findings}
+
+    def _trim_findings(self) -> None:
+        """Keep only the most recently seen distinct findings."""
+        if len(self.findings) <= MAX_FINDINGS:
+            return
+        oldest = sorted(
+            self.findings,
+            key=lambda finding_id: str(self.findings[finding_id].get("last_seen", "")),
+        )[: len(self.findings) - MAX_FINDINGS]
+        for finding_id in oldest:
+            self.findings.pop(finding_id, None)
+            self._active_flow_ids.pop(finding_id, None)
 
 
 def _digest(value: Mapping[str, Any]) -> str:

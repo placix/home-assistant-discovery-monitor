@@ -52,8 +52,9 @@ configuration remains supported.
 
 ## Ignoring discoveries
 
-Each actionable find is shown as a Home Assistant repair. Depending on which
-stable information the discovery provides, it offers one or both choices:
+Open the Discovery Monitor options and select **Recent discoveries**. Choose a
+finding and, depending on which stable information it provides, one or both of
+these actions are offered:
 
 - **Ignore this device in the future**
 - **Ignore this device type in the future**
@@ -68,14 +69,16 @@ manufacturer, service, and type identifiers. Device-specific values such as
 addresses, serial numbers, or `unique_id` are excluded. If there is not enough
 stable information, that choice is not shown.
 
-Matching future flows are logged and then aborted before they remain visible as
-normal new-device discoveries. No entities are created. Rules can be removed
-from the Discovery Monitor options under **Ignored devices and device types**;
+Creating a rule immediately aborts the finding's current discovery flow when it
+still exists. Matching future flows are logged and aborted before they remain
+visible as normal new-device discoveries. No entities are created. Rules can be
+removed from the separate **Ignored devices and device types** options page;
 removing a rule affects only future discoveries.
 
 Rules and the discovery log use Home Assistant's storage helper. Repeated
-identical finds update their last-seen time and occurrence count rather than
-creating an unlimited number of duplicate records.
+identical finds update their first-seen time, last-seen time, and occurrence
+count rather than creating duplicates. At most the 100 most recently seen
+distinct findings are retained; ignore rules are not affected by this limit.
 
 ## Automation example
 

@@ -11,7 +11,12 @@ from homeassistant.helpers import entity_registry as er
 
 from custom_components.discovery_monitor import CONFIG_SCHEMA, async_setup
 from custom_components.discovery_monitor.const import DOMAIN, EVENT_DISCOVERED
-from custom_components.discovery_monitor.identity import device_criteria, type_criteria
+from custom_components.discovery_monitor.identity import (
+    DEVICE,
+    DEVICE_TYPE,
+    device_criteria,
+    type_criteria,
+)
 from custom_components.discovery_monitor.monitor import (
     DiscoveryMonitor,
     extract_safe_discovery_data,
@@ -329,18 +334,20 @@ def test_unique_id_has_priority_for_device_identity() -> None:
 
 
 def test_device_identity_never_falls_back_to_ip_or_random_bluetooth() -> None:
-    assert device_criteria(
-        "example", "dhcp", None, {"ip_address": "192.0.2.1"}
-    ) is None
-    assert device_criteria(
-        "example", "bluetooth", None, {"address": "C2:11:22:33:44:55"}
-    ) is None
-    assert device_criteria(
-        "example",
-        "bluetooth",
-        None,
-        {"address": "00:11:22:33:44:55", "address_type": "random"},
-    ) is None
+    assert device_criteria("example", "dhcp", None, {"ip_address": "192.0.2.1"}) is None
+    assert (
+        device_criteria("example", "bluetooth", None, {"address": "C2:11:22:33:44:55"})
+        is None
+    )
+    assert (
+        device_criteria(
+            "example",
+            "bluetooth",
+            None,
+            {"address": "00:11:22:33:44:55", "address_type": "random"},
+        )
+        is None
+    )
 
 
 def test_source_specific_stable_device_identities() -> None:
@@ -379,9 +386,33 @@ def test_type_identity_excludes_device_specific_and_volatile_values() -> None:
 
 
 def test_type_identity_is_not_created_from_manufacturer_alone() -> None:
-    assert type_criteria(
-        "example", "dhcp", {"manufacturer": "Example", "hostname": "device"}
-    ) is None
+    assert (
+        type_criteria(
+            "example", "dhcp", {"manufacturer": "Example", "hostname": "device"}
+        )
+        is None
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", [DEVICE, DEVICE_TYPE])
+async def test_ignoring_finding_aborts_its_current_flow(kind: str) -> None:
+    monitor, manager, _ = make_monitor()
+
+    class FakeStorage:
+        async def async_add_rule(self, finding_id: str, rule_kind: str) -> bool:
+            assert finding_id == "finding-1"
+            assert rule_kind == kind
+            return True
+
+        def active_flow_id(self, finding_id: str) -> str:
+            assert finding_id == "finding-1"
+            return "current-flow"
+
+    monitor.storage = FakeStorage()
+
+    assert await monitor.async_ignore_finding("finding-1", kind)
+    assert manager.aborted == ["current-flow"]
 
 
 @pytest.mark.asyncio
@@ -392,9 +423,7 @@ async def test_matching_ignore_rule_aborts_flow_but_still_logs() -> None:
         def __init__(self) -> None:
             self.recorded = False
 
-        def matching_rule(
-            self, _device: Any, _device_type: Any
-        ) -> dict[str, Any]:
+        def matching_rule(self, _device: Any, _device_type: Any) -> dict[str, Any]:
             return {"kind": "device"}
 
         async def async_record(self, **_kwargs: Any) -> str:

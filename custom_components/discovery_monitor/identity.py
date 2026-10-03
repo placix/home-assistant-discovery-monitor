@@ -61,9 +61,7 @@ def _hardware_identity(source: str, data: Mapping[str, Any]) -> dict[str, str] |
     return None
 
 
-def _service_identity(
-    data: Mapping[str, Any], source: str
-) -> dict[str, str] | None:
+def _service_identity(data: Mapping[str, Any], source: str) -> dict[str, str] | None:
     """Return a permanent ID advertised by an IP discovery service."""
     fields = (*_DEVICE_ID_FIELDS, "id") if source == "homekit" else _DEVICE_ID_FIELDS
     for field in fields:

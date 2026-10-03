@@ -26,7 +26,6 @@ from .const import (
     EVENT_DISCOVERED,
 )
 from .identity import device_criteria, type_criteria
-from .repairs import async_create_discovery_issue
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -192,6 +191,23 @@ class DiscoveryMonitor:
         except Exception:  # noqa: BLE001 - unload must remain safe across HA changes
             _LOGGER.debug("Discovery flow listener was already removed")
 
+    async def async_ignore_finding(self, finding_id: str, kind: str) -> bool:
+        """Persist an ignore rule and abort its current flow when still active."""
+        if self.storage is None or not await self.storage.async_add_rule(
+            finding_id, kind
+        ):
+            return False
+
+        if flow_id := self.storage.active_flow_id(finding_id):
+            try:
+                self._hass.config_entries.flow.async_abort(flow_id)
+            except AttributeError, UnknownFlow, KeyError, TypeError:
+                _LOGGER.debug(
+                    "Discovery flow %s disappeared before it could be ignored",
+                    flow_id,
+                )
+        return True
+
     @callback
     def _async_flow_changed(self, change: str, flow_id: str) -> None:  # noqa: C901, PLR0911
         """Handle an added discovery flow."""
@@ -247,21 +263,19 @@ class DiscoveryMonitor:
         device_type = type_criteria(domain, source, discovery_data)
         label = _first_string(title, device_name, domain) or domain
 
-        if self.storage is not None and self.storage.matching_rule(
-            device, device_type
-        ):
+        if self.storage is not None and self.storage.matching_rule(device, device_type):
             self._schedule_record(
+                flow_id,
                 domain,
                 source,
                 label,
                 device,
                 device_type,
                 discovery_data,
-                offer_actions=False,
             )
             try:
                 self._hass.config_entries.flow.async_abort(flow_id)
-            except (AttributeError, UnknownFlow, KeyError, TypeError):
+            except AttributeError, UnknownFlow, KeyError, TypeError:
                 _LOGGER.debug(
                     "Ignored discovery flow %s disappeared before it could be aborted",
                     flow_id,
@@ -285,13 +299,13 @@ class DiscoveryMonitor:
             event_data["discovery_data"] = discovery_data
 
         self._schedule_record(
+            flow_id,
             domain,
             source,
             label,
             device,
             device_type,
             discovery_data,
-            offer_actions=True,
         )
         self._hass.bus.async_fire(EVENT_DISCOVERED, event_data)
         if options[CONF_DEBUG_LOGGING]:
@@ -304,14 +318,13 @@ class DiscoveryMonitor:
 
     def _schedule_record(  # noqa: PLR0913, PLR0917
         self,
+        flow_id: str,
         domain: str,
         source: str,
         label: str,
         device: Mapping[str, Any] | None,
         device_type: Mapping[str, Any] | None,
         discovery_data: Mapping[str, Any],
-        *,
-        offer_actions: bool,
     ) -> None:
         """Persist a finding without delaying the flow callback."""
         if self.storage is None:
@@ -333,22 +346,15 @@ class DiscoveryMonitor:
         }
 
         async def async_record() -> None:
-            finding_id = await self.storage.async_record(
+            await self.storage.async_record(
                 domain=domain,
                 source=source,
                 label=label,
                 device=device,
                 device_type=device_type,
                 fallback=fallback,
+                flow_id=flow_id,
             )
-            if offer_actions and (device is not None or device_type is not None):
-                async_create_discovery_issue(
-                    self._hass,
-                    finding_id,
-                    label,
-                    can_ignore_device=device is not None,
-                    can_ignore_type=device_type is not None,
-                )
 
         create_task = getattr(self._hass, "async_create_task", None)
         if callable(create_task):

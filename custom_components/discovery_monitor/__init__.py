@@ -8,6 +8,7 @@ import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import callback
+from homeassistant.helpers import issue_registry as ir
 
 from .const import (
     CONF_DEBUG_LOGGING,
@@ -105,6 +106,7 @@ async def _async_start_monitor(
     if hasattr(hass, "config"):
         storage = DiscoveryStore(hass)
         await storage.async_load()
+        _remove_legacy_discovery_issues(hass)
     monitor = DiscoveryMonitor(hass, options, storage)
     hass.data[DOMAIN] = monitor
     monitor.async_start()
@@ -115,3 +117,12 @@ async def _async_start_monitor(
 
     hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, async_stop_monitor)
     return monitor
+
+
+@callback
+def _remove_legacy_discovery_issues(hass: HomeAssistant) -> None:
+    """Remove per-finding repair issues superseded by central options."""
+    registry = ir.async_get(hass)
+    for (domain, issue_id), issue in list(registry.issues.items()):
+        if domain == DOMAIN and issue.translation_key == "discovery_found":
+            ir.async_delete_issue(hass, domain, issue_id)

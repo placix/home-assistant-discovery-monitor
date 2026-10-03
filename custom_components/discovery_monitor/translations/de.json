@@ -12,33 +12,38 @@
     }
   },
   "options": {
+    "abort": {
+      "identity_unavailable": "Für diese Auswahl ist keine ausreichend stabile Erkennung verfügbar."
+    },
     "step": {
       "init": {
+        "title": "Discovery Monitor",
+        "menu_options": {
+          "recent_findings": "Letzte Funde",
+          "ignored_items": "Ignorierte Geräte und Gerätetypen"
+        }
+      },
+      "recent_findings": {
+        "title": "Letzte Funde",
+        "description": "Einen Fund zur Verwaltung auswählen. Technische IDs und Fingerprints werden nicht angezeigt.",
+        "data": {
+          "finding": "Fund"
+        }
+      },
+      "finding_action": {
+        "title": "Fund ignorieren",
+        "description": "Auswählen, wie zukünftige Funde passend zu {name} behandelt werden sollen. Es werden nur sichere Möglichkeiten angeboten.",
+        "data": {
+          "action": "Zukünftige Behandlung"
+        }
+      },
+      "ignored_items": {
         "title": "Ignorierte Geräte und Gerätetypen",
         "description": "Ein Element auswählen, um passende zukünftige Funde wieder zuzulassen. Das bisherige Protokoll bleibt erhalten.",
         "data": {
           "ignored_item": "Ignorieren aufheben"
         }
       }
-    }
-  },
-  "issues": {
-    "discovery_found": {
-      "fix_flow": {
-        "abort": {
-          "identity_unavailable": "Für diese Auswahl ist keine ausreichend stabile Erkennung verfügbar."
-        },
-        "step": {
-          "init": {
-            "data": {
-              "action": "Zukünftige Behandlung"
-            },
-            "description": "Es werden nur Möglichkeiten angezeigt, für die ausreichend stabile Informationen vorhanden sind.",
-            "title": "Fund ignorieren"
-          }
-        }
-      },
-      "title": "Neuer Fund: {name}"
     }
   }
 }
