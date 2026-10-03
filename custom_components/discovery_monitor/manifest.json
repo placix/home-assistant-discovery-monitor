@@ -17,5 +17,5 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/placix/home-assistant-discovery-monitor/issues",
   "requirements": [],
-  "version": "0.2.3"
+  "version": "0.2.4"
 }

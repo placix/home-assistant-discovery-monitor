@@ -13,6 +13,7 @@ from homeassistant.helpers.selector import (
     SelectSelectorConfig,
     SelectSelectorMode,
 )
+from homeassistant.helpers.translation import async_get_translations
 
 from .const import DOMAIN
 from .identity import DEVICE, DEVICE_TYPE
@@ -87,13 +88,22 @@ class DiscoveryOptionsFlow(config_entries.OptionsFlow):
             self._selected_finding_id = finding_id
             return await self.async_step_finding_action()
 
-        choices = [
-            {"value": finding_id, "label": _finding_label(finding)}
+        visible_findings = [
+            (finding_id, finding)
             for finding_id, finding in sorted(
                 findings.items(),
                 key=lambda item: str(item[1].get("last_seen", "")),
                 reverse=True,
             )
+            if storage is None or not _finding_is_ignored(storage, finding)
+        ]
+        texts = await self._async_dynamic_texts() if visible_findings else {}
+        choices = [
+            {
+                "value": finding_id,
+                "label": _finding_label(finding, texts),
+            }
+            for finding_id, finding in visible_findings
         ]
         schema = (
             vol.Schema(
@@ -127,11 +137,12 @@ class DiscoveryOptionsFlow(config_entries.OptionsFlow):
         if not isinstance(finding, Mapping):
             return self.async_abort(reason="identity_unavailable")
 
+        texts = await self._async_dynamic_texts()
         choices: dict[str, str] = {}
         if isinstance(finding.get("device_criteria"), Mapping):
-            choices[DEVICE] = "Dieses Gerät zukünftig ignorieren"
+            choices[DEVICE] = texts["ignore_device"]
         if isinstance(finding.get("type_criteria"), Mapping):
-            choices[DEVICE_TYPE] = "Diesen Gerätetyp zukünftig ignorieren"
+            choices[DEVICE_TYPE] = texts["ignore_device_type"]
         if not choices:
             return self.async_abort(reason="identity_unavailable")
 
@@ -168,11 +179,12 @@ class DiscoveryOptionsFlow(config_entries.OptionsFlow):
                 await storage.async_remove_rule(rule_id)
             return self.async_create_entry(data=dict(self.config_entry.options))
 
+        texts = await self._async_dynamic_texts() if rules else {}
         choices = (
             [
                 {
                     "value": storage.rule_id(rule),
-                    "label": _rule_label(rule),
+                    "label": _rule_label(rule, texts),
                 }
                 for rule in rules
             ]
@@ -195,25 +207,76 @@ class DiscoveryOptionsFlow(config_entries.OptionsFlow):
         )
         return self.async_show_form(step_id="ignored_items", data_schema=schema)
 
+    async def _async_dynamic_texts(self) -> dict[str, str]:
+        """Return translated text used inside dynamically generated labels."""
+        configured_language = getattr(
+            getattr(self.hass, "config", None), "language", "en"
+        )
+        language = _supported_language(configured_language)
+        translations = await async_get_translations(
+            self.hass,
+            language,
+            "common",
+            integrations={DOMAIN},
+        )
+        prefix = f"component.{DOMAIN}.common."
+        return {
+            key: translations[f"{prefix}{key}"]
+            for key in (
+                "device",
+                "device_type",
+                "integration",
+                "source",
+                "discoveries",
+                "last_seen",
+                "ignore_device",
+                "ignore_device_type",
+                "finding",
+                "unknown",
+            )
+        }
 
-def _finding_label(finding: Mapping[str, Any]) -> str:
-    """Return a readable choice label without technical IDs or fingerprints."""
-    label = str(finding.get("label") or finding.get("domain") or "Fund")
-    domain = str(finding.get("domain") or "unbekannt")
-    source = str(finding.get("source") or "unbekannt")
-    count = max(int(finding.get("count", 1)), 1)
-    last_seen = str(finding.get("last_seen") or "unbekannt")
+
+def _finding_is_ignored(storage: DiscoveryStore, finding: Mapping[str, Any]) -> bool:
+    """Return whether an existing rule matches a stored finding."""
+    device = finding.get("device_criteria")
+    device_type = finding.get("type_criteria")
     return (
-        f"{label} — Integration: {domain} · Quelle: {source} · "
-        f"Funde: {count} · Zuletzt gesehen: {last_seen}"
+        storage.matching_rule(
+            device if isinstance(device, Mapping) else None,
+            device_type if isinstance(device_type, Mapping) else None,
+        )
+        is not None
     )
 
 
-def _rule_label(rule: Mapping[str, Any]) -> str:
+def _finding_label(finding: Mapping[str, Any], texts: Mapping[str, str]) -> str:
+    """Return a readable choice label without technical IDs or fingerprints."""
+    label = str(finding.get("label") or finding.get("domain") or texts["finding"])
+    domain = str(finding.get("domain") or texts["unknown"])
+    source = str(finding.get("source") or texts["unknown"])
+    count = max(int(finding.get("count", 1)), 1)
+    last_seen = str(finding.get("last_seen") or texts["unknown"])
+    return (
+        f"{label} — {texts['integration']}: {domain} · "
+        f"{texts['source']}: {source} · {texts['discoveries']}: {count} · "
+        f"{texts['last_seen']}: {last_seen}"
+    )
+
+
+def _rule_label(rule: Mapping[str, Any], texts: Mapping[str, str]) -> str:
     """Return a readable ignore-rule label without exposing its identity."""
-    label = str(rule.get("label") or "Gerät")
-    kind = "Gerät" if rule.get("kind") == DEVICE else "Gerätetyp"
+    label = str(rule.get("label") or texts["device"])
+    kind = texts["device"] if rule.get("kind") == DEVICE else texts["device_type"]
     criteria = rule.get("criteria")
     domain = criteria.get("domain") if isinstance(criteria, Mapping) else None
-    integration = f" · Integration: {domain}" if domain else ""
+    integration = f" · {texts['integration']}: {domain}" if domain else ""
     return f"{label} — {kind}{integration}"
+
+
+def _supported_language(value: Any) -> str:
+    """Return German when configured, otherwise use the English fallback."""
+    if not isinstance(value, str):
+        return "en"
+    language = value.casefold().replace("_", "-").split("-", 1)[0]
+    return "de" if language == "de" else "en"

@@ -1,5 +1,17 @@
 {
   "title": "Discovery Monitor",
+  "common": {
+    "device": "Device",
+    "device_type": "Device type",
+    "integration": "Integration",
+    "source": "Source",
+    "discoveries": "Discoveries",
+    "last_seen": "Last seen",
+    "ignore_device": "Ignore this device in the future",
+    "ignore_device_type": "Ignore this device type in the future",
+    "finding": "Discovery",
+    "unknown": "unknown"
+  },
   "config": {
     "step": {
       "user": {

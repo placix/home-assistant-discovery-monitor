@@ -1,5 +1,17 @@
 {
   "title": "Discovery Monitor",
+  "common": {
+    "device": "Gerät",
+    "device_type": "Gerätetyp",
+    "integration": "Integration",
+    "source": "Quelle",
+    "discoveries": "Funde",
+    "last_seen": "Zuletzt gesehen",
+    "ignore_device": "Dieses Gerät zukünftig ignorieren",
+    "ignore_device_type": "Diesen Gerätetyp zukünftig ignorieren",
+    "finding": "Fund",
+    "unknown": "unbekannt"
+  },
   "config": {
     "step": {
       "user": {
