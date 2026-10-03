@@ -25,7 +25,7 @@
       },
       "recent_findings": {
         "title": "Recent discoveries",
-        "description": "Select a discovery to manage. Technical identifiers and fingerprints are not displayed.",
+        "description": "Recent discoveries are shown directly as a list. Select a discovery to manage. Technical identifiers and fingerprints are not displayed.",
         "data": {
           "finding": "Discovery"
         }
@@ -39,7 +39,7 @@
       },
       "ignored_items": {
         "title": "Ignored devices and device types",
-        "description": "Select an item to allow matching future discoveries again. Historical records are retained.",
+        "description": "All ignore rules are shown directly as a list. Select an item to allow matching future discoveries again. Historical records are retained.",
         "data": {
           "ignored_item": "Stop ignoring"
         }

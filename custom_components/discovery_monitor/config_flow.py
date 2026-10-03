@@ -8,6 +8,11 @@ from typing import TYPE_CHECKING, Any
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
+from homeassistant.helpers.selector import (
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+)
 
 from .const import DOMAIN
 from .identity import DEVICE, DEVICE_TYPE
@@ -82,16 +87,25 @@ class DiscoveryOptionsFlow(config_entries.OptionsFlow):
             self._selected_finding_id = finding_id
             return await self.async_step_finding_action()
 
-        choices = {
-            finding_id: _finding_label(finding)
+        choices = [
+            {"value": finding_id, "label": _finding_label(finding)}
             for finding_id, finding in sorted(
                 findings.items(),
                 key=lambda item: str(item[1].get("last_seen", "")),
                 reverse=True,
             )
-        }
+        ]
         schema = (
-            vol.Schema({vol.Required("finding"): vol.In(choices)})
+            vol.Schema(
+                {
+                    vol.Required("finding"): SelectSelector(
+                        SelectSelectorConfig(
+                            options=choices,
+                            mode=SelectSelectorMode.LIST,
+                        )
+                    )
+                }
+            )
             if choices
             else vol.Schema({})
         )
@@ -155,18 +169,27 @@ class DiscoveryOptionsFlow(config_entries.OptionsFlow):
             return self.async_create_entry(data=dict(self.config_entry.options))
 
         choices = (
-            {
-                storage.rule_id(rule): (
-                    f"{rule['label']} — "
-                    f"{'Gerät' if rule['kind'] == DEVICE else 'Gerätetyp'}"
-                )
+            [
+                {
+                    "value": storage.rule_id(rule),
+                    "label": _rule_label(rule),
+                }
                 for rule in rules
-            }
+            ]
             if storage is not None
-            else {}
+            else []
         )
         schema = (
-            vol.Schema({vol.Required("ignored_item"): vol.In(choices)})
+            vol.Schema(
+                {
+                    vol.Required("ignored_item"): SelectSelector(
+                        SelectSelectorConfig(
+                            options=choices,
+                            mode=SelectSelectorMode.LIST,
+                        )
+                    )
+                }
+            )
             if choices
             else vol.Schema({})
         )
@@ -179,4 +202,18 @@ def _finding_label(finding: Mapping[str, Any]) -> str:
     domain = str(finding.get("domain") or "unbekannt")
     source = str(finding.get("source") or "unbekannt")
     count = max(int(finding.get("count", 1)), 1)
-    return f"{label} — {domain} · {source} · {count}x"
+    last_seen = str(finding.get("last_seen") or "unbekannt")
+    return (
+        f"{label} — Integration: {domain} · Quelle: {source} · "
+        f"Funde: {count} · Zuletzt gesehen: {last_seen}"
+    )
+
+
+def _rule_label(rule: Mapping[str, Any]) -> str:
+    """Return a readable ignore-rule label without exposing its identity."""
+    label = str(rule.get("label") or "Gerät")
+    kind = "Gerät" if rule.get("kind") == DEVICE else "Gerätetyp"
+    criteria = rule.get("criteria")
+    domain = criteria.get("domain") if isinstance(criteria, Mapping) else None
+    integration = f" · Integration: {domain}" if domain else ""
+    return f"{label} — {kind}{integration}"

@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers.selector import SelectSelector
 
 from custom_components.discovery_monitor.config_flow import DiscoveryOptionsFlow
 from custom_components.discovery_monitor.const import DOMAIN
@@ -78,10 +79,17 @@ async def test_recent_finding_can_be_ignored_without_showing_ids() -> None:
     flow, monitor, _ = make_flow()
 
     selection = await flow.async_step_recent_findings()
-    validator = next(iter(selection["data_schema"].schema.values()))
-    labels = " ".join(validator.container.values())
+    selector = next(iter(selection["data_schema"].schema.values()))
+    labels = " ".join(option["label"] for option in selector.config["options"])
 
     assert selection["type"] is FlowResultType.FORM
+    assert isinstance(selector, SelectSelector)
+    assert selector.config["mode"] == "list"
+    assert "Kitchen Shelly" in labels
+    assert "Integration: shelly" in labels
+    assert "Quelle: zeroconf" in labels
+    assert "Funde: 3" in labels
+    assert "Zuletzt gesehen: 2026-10-03T08:00:00+00:00" in labels
     assert "private-fingerprint" not in labels
     assert "technical-device-id" not in labels
 
@@ -99,9 +107,16 @@ async def test_ignore_rule_can_be_removed_from_subpage() -> None:
     flow, _, storage = make_flow()
 
     form = await flow.async_step_ignored_items()
+    selector = next(iter(form["data_schema"].schema.values()))
+    labels = " ".join(option["label"] for option in selector.config["options"])
     completed = await flow.async_step_ignored_items({"ignored_item": "private-rule-id"})
 
     assert form["type"] is FlowResultType.FORM
     assert form["step_id"] == "ignored_items"
+    assert isinstance(selector, SelectSelector)
+    assert selector.config["mode"] == "list"
+    assert "Kitchen Shelly — Gerät · Integration: shelly" in labels
+    assert "private-rule-id" not in labels
+    assert "device-1" not in labels
     assert completed["type"] is FlowResultType.CREATE_ENTRY
     assert storage.removed == ["private-rule-id"]

@@ -25,7 +25,7 @@
       },
       "recent_findings": {
         "title": "Letzte Funde",
-        "description": "Einen Fund zur Verwaltung auswählen. Technische IDs und Fingerprints werden nicht angezeigt.",
+        "description": "Die letzten Funde werden direkt als Liste angezeigt. Einen Fund zur Verwaltung auswählen. Technische IDs und Fingerprints werden nicht angezeigt.",
         "data": {
           "finding": "Fund"
         }
@@ -39,7 +39,7 @@
       },
       "ignored_items": {
         "title": "Ignorierte Geräte und Gerätetypen",
-        "description": "Ein Element auswählen, um passende zukünftige Funde wieder zuzulassen. Das bisherige Protokoll bleibt erhalten.",
+        "description": "Alle Ignore-Regeln werden direkt als Liste angezeigt. Ein Element auswählen, um passende zukünftige Funde wieder zuzulassen. Das bisherige Protokoll bleibt erhalten.",
         "data": {
           "ignored_item": "Ignorieren aufheben"
         }
