@@ -107,9 +107,16 @@ def use_component_translation_files(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def make_flow(language: str = "en") -> tuple[DiscoveryOptionsFlow, Any, FakeStorage]:
     storage = FakeStorage()
+
+    async def async_ignore_finding(finding_id: str, kind: str) -> bool:
+        if finding_id not in storage.findings:
+            return False
+        storage.add_matching_rule(kind)
+        return True
+
     monitor = SimpleNamespace(
         storage=storage,
-        async_ignore_finding=AsyncMock(return_value=True),
+        async_ignore_finding=AsyncMock(side_effect=async_ignore_finding),
     )
     entry = SimpleNamespace(options={})
     flow = DiscoveryOptionsFlow()
@@ -165,8 +172,10 @@ async def test_recent_finding_can_be_ignored_without_showing_ids() -> None:
     assert action["type"] is FlowResultType.FORM
     assert action["step_id"] == "finding_action"
 
-    completed = await flow.async_step_finding_action({"action": DEVICE})
-    assert completed["type"] is FlowResultType.CREATE_ENTRY
+    returned = await flow.async_step_finding_action({"action": DEVICE})
+    assert returned["type"] is FlowResultType.FORM
+    assert returned["step_id"] == "recent_findings"
+    assert returned["data_schema"].schema == {}
     monitor.async_ignore_finding.assert_awaited_once_with("private-fingerprint", DEVICE)
 
 
@@ -178,7 +187,7 @@ async def test_ignore_rule_can_be_removed_from_subpage() -> None:
     form = await flow.async_step_ignored_items()
     selector = next(iter(form["data_schema"].schema.values()))
     labels = " ".join(option["label"] for option in selector.config["options"])
-    completed = await flow.async_step_ignored_items({"ignored_item": rule_id})
+    returned = await flow.async_step_ignored_items({"ignored_item": rule_id})
 
     assert form["type"] is FlowResultType.FORM
     assert form["step_id"] == "ignored_items"
@@ -187,8 +196,57 @@ async def test_ignore_rule_can_be_removed_from_subpage() -> None:
     assert "Kitchen Shelly — Device · Integration: shelly" in labels
     assert rule_id not in labels
     assert "technical-device-id" not in labels
-    assert completed["type"] is FlowResultType.CREATE_ENTRY
+    assert returned["type"] is FlowResultType.FORM
+    assert returned["step_id"] == "ignored_items"
+    assert returned["data_schema"].schema == {}
     assert storage.removed == [rule_id]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("step", ["recent_findings", "ignored_items"])
+async def test_empty_management_list_closes_when_confirmed(step: str) -> None:
+    flow, _, storage = make_flow()
+    storage.findings.clear()
+
+    show_step = getattr(flow, f"async_step_{step}")
+    empty = await show_step()
+    completed = await show_step({})
+
+    assert empty["type"] is FlowResultType.FORM
+    assert empty["step_id"] == step
+    assert empty["data_schema"].schema == {}
+    assert completed["type"] is FlowResultType.CREATE_ENTRY
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", [DEVICE, DEVICE_TYPE])
+async def test_ignore_action_returns_to_updated_recent_findings(kind: str) -> None:
+    flow, _, storage = make_flow()
+
+    await flow.async_step_recent_findings({"finding": "private-fingerprint"})
+    returned = await flow.async_step_finding_action({"action": kind})
+    completed = await flow.async_step_recent_findings({})
+
+    assert returned["type"] is FlowResultType.FORM
+    assert returned["step_id"] == "recent_findings"
+    assert returned["data_schema"].schema == {}
+    assert "private-fingerprint" in storage.findings
+    assert completed["type"] is FlowResultType.CREATE_ENTRY
+
+
+@pytest.mark.asyncio
+async def test_remove_rule_returns_to_updated_ignored_items() -> None:
+    flow, _, storage = make_flow()
+    rule_id = storage.add_matching_rule(DEVICE)
+
+    returned = await flow.async_step_ignored_items({"ignored_item": rule_id})
+    completed = await flow.async_step_ignored_items({})
+
+    assert returned["type"] is FlowResultType.FORM
+    assert returned["step_id"] == "ignored_items"
+    assert returned["data_schema"].schema == {}
+    assert storage.rules == []
+    assert completed["type"] is FlowResultType.CREATE_ENTRY
 
 
 @pytest.mark.asyncio

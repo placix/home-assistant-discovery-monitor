@@ -82,12 +82,6 @@ class DiscoveryOptionsFlow(config_entries.OptionsFlow):
         storage = self._storage
         findings = storage.findings if storage is not None else {}
 
-        if user_input is not None and isinstance(
-            finding_id := user_input.get("finding"), str
-        ):
-            self._selected_finding_id = finding_id
-            return await self.async_step_finding_action()
-
         visible_findings = [
             (finding_id, finding)
             for finding_id, finding in sorted(
@@ -97,6 +91,13 @@ class DiscoveryOptionsFlow(config_entries.OptionsFlow):
             )
             if storage is None or not _finding_is_ignored(storage, finding)
         ]
+        if user_input is not None:
+            if isinstance(finding_id := user_input.get("finding"), str):
+                self._selected_finding_id = finding_id
+                return await self.async_step_finding_action()
+            if not visible_findings:
+                return self.async_create_entry(data=dict(self.config_entry.options))
+
         texts = await self._async_dynamic_texts() if visible_findings else {}
         choices = [
             {
@@ -158,7 +159,8 @@ class DiscoveryOptionsFlow(config_entries.OptionsFlow):
                 )
             ):
                 return self.async_abort(reason="identity_unavailable")
-            return self.async_create_entry(data=dict(self.config_entry.options))
+            self._selected_finding_id = None
+            return await self.async_step_recent_findings()
 
         return self.async_show_form(
             step_id="finding_action",
@@ -175,9 +177,14 @@ class DiscoveryOptionsFlow(config_entries.OptionsFlow):
 
         if user_input is not None:
             rule_id = user_input.get("ignored_item")
-            if storage is not None and isinstance(rule_id, str):
-                await storage.async_remove_rule(rule_id)
-            return self.async_create_entry(data=dict(self.config_entry.options))
+            if (
+                storage is not None
+                and isinstance(rule_id, str)
+                and await storage.async_remove_rule(rule_id)
+            ):
+                return await self.async_step_ignored_items()
+            if not rules:
+                return self.async_create_entry(data=dict(self.config_entry.options))
 
         texts = await self._async_dynamic_texts() if rules else {}
         choices = (

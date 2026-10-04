@@ -1,6 +1,6 @@
 [project]
 name = "home-assistant-discovery-monitor"
-version = "0.2.4"
+version = "0.2.5"
 description = "Expose detailed Home Assistant discovery config flows as safe events"
 readme = "README.md"
 requires-python = ">=3.14.2"
