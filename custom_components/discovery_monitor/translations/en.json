@@ -18,7 +18,27 @@
     "ignore_device": "Ignore this device in the future",
     "ignore_device_type": "Ignore this device type in the future",
     "finding": "Discovery",
-    "unknown": "unknown"
+    "unknown": "unknown",
+    "panel_open_discoveries": "Open discoveries",
+    "panel_intro": "Manage discoveries here. Hiding a discovery only removes it from this list; ignoring also suppresses matching future discoveries.",
+    "panel_saving": "Saving …",
+    "panel_recent": "Recent discoveries",
+    "panel_ignored": "Ignored devices and device types",
+    "panel_search": "Search by name, integration or source",
+    "panel_no_matches": "No matching entries.",
+    "panel_no_findings": "No open discoveries.",
+    "panel_no_rules": "No ignored devices or device types.",
+    "panel_kind": "Rule type",
+    "panel_unignore": "Stop ignoring",
+    "panel_unavailable": "Discovery Monitor is not loaded. Retry once the integration is available.",
+    "panel_cancel": "Cancel",
+    "panel_confirm_dismiss": "Hide this discovery from the list without ignoring the device. Future discovery flows are not blocked by this action.",
+    "panel_confirm_device": "Ignore this device in the future and remove its current discovery flow, if it still exists.",
+    "panel_confirm_device_type": "Ignore all matching devices of this type in the future and remove this discovery's current flow, if it still exists.",
+    "panel_confirm_unignore": "Remove this ignore rule and allow matching future discoveries again. Other matching rules still apply.",
+    "panel_saved": "Saved.",
+    "panel_stale": "This entry has changed or is no longer available. Please choose a current entry.",
+    "panel_action_failed": "The action could not be completed. Please try again."
   },
   "config": {
     "step": {

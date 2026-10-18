@@ -7,3 +7,4 @@ pytest-cache-files-*/
 .mypy_cache/
 .venv/
 htmlcov/
+node_modules/

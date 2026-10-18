@@ -18,7 +18,27 @@
     "ignore_device": "Dieses Gerät zukünftig ignorieren",
     "ignore_device_type": "Diesen Gerätetyp zukünftig ignorieren",
     "finding": "Fund",
-    "unknown": "unbekannt"
+    "unknown": "unbekannt",
+    "panel_open_discoveries": "Offene Funde",
+    "panel_intro": "Funde direkt verwalten. Ausblenden entfernt einen Fund nur aus dieser Liste; Ignorieren unterdrückt auch passende zukünftige Funde.",
+    "panel_saving": "Wird gespeichert …",
+    "panel_recent": "Letzte Funde",
+    "panel_ignored": "Ignorierte Geräte und Gerätetypen",
+    "panel_search": "Nach Name, Integration oder Quelle suchen",
+    "panel_no_matches": "Keine passenden Einträge.",
+    "panel_no_findings": "Keine offenen Funde.",
+    "panel_no_rules": "Keine ignorierten Geräte oder Gerätetypen.",
+    "panel_kind": "Regeltyp",
+    "panel_unignore": "Ignorieren aufheben",
+    "panel_unavailable": "Discovery Monitor ist nicht geladen. Erneut versuchen, sobald die Integration verfügbar ist.",
+    "panel_cancel": "Abbrechen",
+    "panel_confirm_dismiss": "Diesen Fund aus der Liste ausblenden, ohne das Gerät zu ignorieren. Zukünftige Discovery-Flows werden dadurch nicht blockiert.",
+    "panel_confirm_device": "Dieses Gerät zukünftig ignorieren und seinen aktuellen Discovery-Flow entfernen, sofern dieser noch existiert.",
+    "panel_confirm_device_type": "Alle passenden Geräte dieses Typs zukünftig ignorieren und den aktuellen Discovery-Flow dieses Fundes entfernen, sofern dieser noch existiert.",
+    "panel_confirm_unignore": "Diese Ignore-Regel entfernen und passende zukünftige Funde wieder zulassen. Andere passende Regeln gelten weiterhin.",
+    "panel_saved": "Gespeichert.",
+    "panel_stale": "Dieser Eintrag hat sich geändert oder ist nicht mehr verfügbar. Bitte einen aktuellen Eintrag auswählen.",
+    "panel_action_failed": "Die Aktion konnte nicht abgeschlossen werden. Bitte erneut versuchen."
   },
   "config": {
     "step": {

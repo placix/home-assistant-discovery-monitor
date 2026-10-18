@@ -20,7 +20,23 @@ recently seen visible findings. Ignored and deliberately hidden findings are
 excluded. The sensor is not attached to a device and no dashboard is changed
 automatically.
 
-To use the sensor as a shortcut from a dashboard, add a tile card such as:
+## Direct discovery management
+
+UI setup adds an administrator-only **Discovery Monitor** page to the sidebar,
+available at `/discovery-monitor`. It shows the live count and a searchable list
+of open discoveries, with actions to hide a finding, ignore a device or device
+type, and remove existing ignore rules. Actions require confirmation; unsafe
+ignore choices are not offered. The page updates automatically and supports
+German and English, with English as the fallback.
+
+In Home Assistant's Home dashboard, edit the **Summaries** shortcuts and add a
+custom shortcut with path `/discovery-monitor`, label **Discovery Monitor**, and
+icon `mdi:radar`. This opens the management page directly, without going through
+Settings or the sensor's more-info dialog. The native custom summary shortcut
+has a static label; the live count is displayed on the management page.
+Dashboards are not modified automatically.
+
+For a dashboard card that shows the count as well as opening management, use:
 
 ```yaml
 type: tile
@@ -28,13 +44,12 @@ entity: sensor.discovery_monitor_open_discoveries
 name: Discovery Monitor
 tap_action:
   action: navigate
-  navigation_path: /config/integrations/integration/discovery_monitor
+  navigation_path: /discovery-monitor
 ```
 
-The tile shows the current count and opens Discovery Monitor's integration page
-without navigating through Settings first. Home Assistant's native tile card
-cannot render the dynamic per-finding actions itself; those remain in the
-integration options.
+The tile shows the current count and opens the management page directly.
+The existing integration options remain available. YAML-only monitoring does
+not create a sidebar panel or sensor; add the UI entry to enable them.
 
 ## Event example
 
@@ -76,9 +91,9 @@ configuration remains supported.
 
 ## Ignoring discoveries
 
-Open the Discovery Monitor options and select **Recent discoveries**. Choose a
-finding and, depending on which stable information it provides, one or both of
-these actions are offered:
+Open **Discovery Monitor** in the sidebar (or use the integration options) and
+select **Recent discoveries**. Depending on which stable information a finding
+provides, one or both of these actions are offered:
 
 - **Ignore this device in the future**
 - **Ignore this device type in the future**
@@ -96,7 +111,7 @@ stable information, that choice is not shown.
 Creating a rule immediately aborts the finding's current discovery flow when it
 still exists. Matching future flows are logged and aborted before they remain
 visible as normal new-device discoveries. Rules can be removed from the separate
-**Ignored devices and device types** options page; removing a rule affects only
+**Ignored devices and device types** view; removing a rule affects only
 future discoveries and makes matching stored findings visible again. Apart from
 the single diagnostic summary sensor, no entities are created for discoveries.
 
@@ -220,6 +235,17 @@ python -m pip install -r requirements_test.txt
 ruff check .
 pytest
 ```
+
+The management panel also has browser regression tests (Node.js required):
+
+```bash
+npm ci --prefix tests/frontend
+npm exec --prefix tests/frontend -- playwright install chromium
+npm test --prefix tests/frontend
+```
+
+These exercise the panel with a simulated Home Assistant connection; the Python
+tests separately cover the real Home Assistant WebSocket API and panel lifecycle.
 
 GitHub release drafts are created automatically when a maintainer deliberately
 pushes a `v*` version tag.

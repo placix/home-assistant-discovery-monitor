@@ -23,6 +23,7 @@ from .const import (
 )
 from .identity import device_criteria
 from .monitor import DiscoveryMonitor
+from .panel import async_setup_panel, async_unload_panel
 from .storage import DiscoveryStore
 
 if TYPE_CHECKING:
@@ -88,6 +89,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         monitor.config_entry_id = entry.entry_id
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    await async_setup_panel(hass)
     return True
 
 
@@ -95,6 +97,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a UI-owned monitor while leaving YAML setup active."""
     if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         return False
+    async_unload_panel(hass)
     monitor = hass.data.get(DOMAIN)
     if getattr(monitor, "config_entry_id", None) == entry.entry_id:
         monitor.async_stop()
