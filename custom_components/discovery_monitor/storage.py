@@ -111,6 +111,16 @@ class DiscoveryStore:
         """Return the most recent in-progress flow associated with a finding."""
         return self._active_flow_ids.get(finding_id)
 
+    async def async_dismiss_finding(self, finding_id: str) -> bool:
+        """Hide a finding from management without suppressing discovery."""
+        async with self._lock:
+            finding = self.findings.get(finding_id)
+            if finding is None:
+                return False
+            finding["dismissed"] = True
+            await self._async_save()
+        return True
+
     async def async_add_rule(self, finding_id: str, kind: str) -> bool:
         """Create a rule from a logged finding if that identity is safe."""
         async with self._lock:

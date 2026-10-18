@@ -7,6 +7,7 @@
     "source": "Source",
     "discoveries": "Discoveries",
     "last_seen": "Last seen",
+    "dismiss_finding": "Do not show this discovery again",
     "ignore_device": "Ignore this device in the future",
     "ignore_device_type": "Ignore this device type in the future",
     "finding": "Discovery",
@@ -43,10 +44,10 @@
         }
       },
       "finding_action": {
-        "title": "Ignore discovery",
-        "description": "Choose how future discoveries matching {name} should be handled. Only safe choices are shown.",
+        "title": "Manage discovery",
+        "description": "Choose whether to hide {name} from this list or ignore matching future discoveries. Only safe ignore choices are shown.",
         "data": {
-          "action": "Future handling"
+          "action": "Action"
         }
       },
       "ignored_items": {

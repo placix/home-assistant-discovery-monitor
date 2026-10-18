@@ -89,6 +89,39 @@ async def test_rule_has_only_required_fields_and_removal_keeps_history() -> None
 
 
 @pytest.mark.asyncio
+async def test_dismissed_finding_stays_logged_and_hidden_on_repeat() -> None:
+    storage = make_store()
+    device = {"domain": "example", "unique_id": "accepted-device"}
+
+    finding_id = await storage.async_record(
+        domain="example",
+        source="dhcp",
+        label="Accepted device",
+        device=device,
+        device_type=None,
+        fallback={},
+        flow_id="flow-1",
+    )
+    assert await storage.async_dismiss_finding(finding_id)
+
+    repeated_id = await storage.async_record(
+        domain="example",
+        source="dhcp",
+        label="Accepted device",
+        device=device,
+        device_type=None,
+        fallback={},
+        flow_id="flow-2",
+    )
+
+    assert repeated_id == finding_id
+    assert finding_id in storage.findings
+    assert storage.findings[finding_id]["dismissed"] is True
+    assert storage.findings[finding_id]["count"] == 2
+    assert storage.rules == []
+
+
+@pytest.mark.asyncio
 async def test_findings_are_available_without_waiting_for_disk_save() -> None:
     storage = make_store()
 

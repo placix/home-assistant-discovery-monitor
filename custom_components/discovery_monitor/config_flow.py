@@ -18,6 +18,8 @@ from homeassistant.helpers.translation import async_get_translations
 from .const import DOMAIN
 from .identity import DEVICE, DEVICE_TYPE
 
+_DISMISS = "dismiss"
+
 if TYPE_CHECKING:
     from .monitor import DiscoveryMonitor
     from .storage import DiscoveryStore
@@ -89,7 +91,8 @@ class DiscoveryOptionsFlow(config_entries.OptionsFlow):
                 key=lambda item: str(item[1].get("last_seen", "")),
                 reverse=True,
             )
-            if storage is None or not _finding_is_ignored(storage, finding)
+            if not finding.get("dismissed")
+            and (storage is None or not _finding_is_ignored(storage, finding))
         ]
         if user_input is not None:
             if isinstance(finding_id := user_input.get("finding"), str):
@@ -139,26 +142,34 @@ class DiscoveryOptionsFlow(config_entries.OptionsFlow):
             return self.async_abort(reason="identity_unavailable")
 
         texts = await self._async_dynamic_texts()
-        choices: dict[str, str] = {}
+        choices: dict[str, str] = {_DISMISS: texts["dismiss_finding"]}
         if isinstance(finding.get("device_criteria"), Mapping):
             choices[DEVICE] = texts["ignore_device"]
         if isinstance(finding.get("type_criteria"), Mapping):
             choices[DEVICE_TYPE] = texts["ignore_device_type"]
-        if not choices:
-            return self.async_abort(reason="identity_unavailable")
 
         if user_input is not None and isinstance(
             action := user_input.get("action"), str
         ):
-            monitor = self._monitor
-            if (
-                monitor is None
-                or self._selected_finding_id is None
-                or not await monitor.async_ignore_finding(
-                    self._selected_finding_id, action
-                )
-            ):
-                return self.async_abort(reason="identity_unavailable")
+            if action == _DISMISS:
+                if (
+                    storage is None
+                    or self._selected_finding_id is None
+                    or not await storage.async_dismiss_finding(
+                        self._selected_finding_id
+                    )
+                ):
+                    return self.async_abort(reason="identity_unavailable")
+            else:
+                monitor = self._monitor
+                if (
+                    monitor is None
+                    or self._selected_finding_id is None
+                    or not await monitor.async_ignore_finding(
+                        self._selected_finding_id, action
+                    )
+                ):
+                    return self.async_abort(reason="identity_unavailable")
             self._selected_finding_id = None
             return await self.async_step_recent_findings()
 
@@ -236,6 +247,7 @@ class DiscoveryOptionsFlow(config_entries.OptionsFlow):
                 "source",
                 "discoveries",
                 "last_seen",
+                "dismiss_finding",
                 "ignore_device",
                 "ignore_device_type",
                 "finding",

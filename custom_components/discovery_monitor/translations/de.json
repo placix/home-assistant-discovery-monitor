@@ -7,6 +7,7 @@
     "source": "Quelle",
     "discoveries": "Funde",
     "last_seen": "Zuletzt gesehen",
+    "dismiss_finding": "Diesen Fund nicht mehr anzeigen",
     "ignore_device": "Dieses Gerät zukünftig ignorieren",
     "ignore_device_type": "Diesen Gerätetyp zukünftig ignorieren",
     "finding": "Fund",
@@ -43,10 +44,10 @@
         }
       },
       "finding_action": {
-        "title": "Fund ignorieren",
-        "description": "Auswählen, wie zukünftige Funde passend zu {name} behandelt werden sollen. Es werden nur sichere Möglichkeiten angeboten.",
+        "title": "Fund verwalten",
+        "description": "Auswählen, ob {name} nur aus dieser Liste ausgeblendet oder ob passende zukünftige Funde ignoriert werden sollen. Es werden nur sichere Möglichkeiten zum Ignorieren angeboten.",
         "data": {
-          "action": "Zukünftige Behandlung"
+          "action": "Aktion"
         }
       },
       "ignored_items": {

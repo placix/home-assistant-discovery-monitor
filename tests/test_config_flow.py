@@ -63,6 +63,13 @@ class FakeStorage:
         self.rules = [rule for rule in self.rules if self.rule_id(rule) != rule_id]
         return len(self.rules) != old_length
 
+    async def async_dismiss_finding(self, finding_id: str) -> bool:
+        finding = self.findings.get(finding_id)
+        if finding is None:
+            return False
+        finding["dismissed"] = True
+        return True
+
     def add_matching_rule(self, kind: str) -> str:
         field = "device_criteria" if kind == DEVICE else "type_criteria"
         rule = {
@@ -235,6 +242,21 @@ async def test_ignore_action_returns_to_updated_recent_findings(kind: str) -> No
 
 
 @pytest.mark.asyncio
+async def test_dismiss_action_hides_finding_without_ignoring_it() -> None:
+    flow, monitor, storage = make_flow()
+
+    await flow.async_step_recent_findings({"finding": "private-fingerprint"})
+    returned = await flow.async_step_finding_action({"action": "dismiss"})
+
+    assert returned["type"] is FlowResultType.FORM
+    assert returned["step_id"] == "recent_findings"
+    assert returned["data_schema"].schema == {}
+    assert storage.findings["private-fingerprint"]["dismissed"] is True
+    assert storage.rules == []
+    monitor.async_ignore_finding.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_remove_rule_returns_to_updated_ignored_items() -> None:
     flow, _, storage = make_flow()
     rule_id = storage.add_matching_rule(DEVICE)
@@ -288,6 +310,7 @@ async def test_german_dynamic_labels() -> None:
     assert "Quelle: zeroconf" in selector_labels(findings)
     assert "Funde: 3" in selector_labels(findings)
     assert "Zuletzt gesehen:" in selector_labels(findings)
+    assert "Diesen Fund nicht mehr anzeigen" in matching_rule_labels(action)
     assert "Dieses Gerät zukünftig ignorieren" in matching_rule_labels(action)
     assert "Diesen Gerätetyp zukünftig ignorieren" in matching_rule_labels(action)
     assert "Kitchen Shelly — Gerätetyp · Integration: shelly" in selector_labels(
@@ -309,6 +332,7 @@ async def test_english_dynamic_labels_and_fallback(language: str) -> None:
     assert "Source: zeroconf" in selector_labels(findings)
     assert "Discoveries: 3" in selector_labels(findings)
     assert "Last seen:" in selector_labels(findings)
+    assert "Do not show this discovery again" in matching_rule_labels(action)
     assert "Ignore this device in the future" in matching_rule_labels(action)
     assert "Ignore this device type in the future" in matching_rule_labels(action)
     assert "Kitchen Shelly — Device · Integration: shelly" in selector_labels(ignored)
