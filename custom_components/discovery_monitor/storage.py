@@ -76,7 +76,7 @@ class DiscoveryStore:
 
     def is_finding_visible(self, finding: Mapping[str, Any]) -> bool:
         """Return whether a finding is visible in discovery management."""
-        if finding.get("dismissed"):
+        if finding.get("dismissed") or finding.get("resolved"):
             return False
         device = finding.get("device_criteria")
         device_type = finding.get("type_criteria")
@@ -125,6 +125,7 @@ class DiscoveryStore:
                 finding["last_seen"] = now
                 finding["count"] = int(finding.get("count", 1)) + 1
                 finding["label"] = label
+                finding.pop("resolved", None)
                 if device is not None:
                     finding["device_criteria"] = dict(device)
                 if device_type is not None:
@@ -146,6 +147,54 @@ class DiscoveryStore:
             self._store.async_delay_save(self._data_to_save, _FINDING_SAVE_DELAY)
         self._notify_listeners()
         return finding_id
+
+    async def async_mark_flow_removed(self, flow_id: str) -> bool:
+        """Mark a finding resolved when its discovery flow is removed."""
+        async with self._lock:
+            finding_id = next(
+                (
+                    finding_id
+                    for finding_id, active_flow_id in self._active_flow_ids.items()
+                    if active_flow_id == flow_id
+                ),
+                None,
+            )
+            if finding_id is None:
+                return False
+            self._active_flow_ids.pop(finding_id, None)
+            finding = self.findings.get(finding_id)
+            if finding is None or finding.get("resolved"):
+                return False
+            finding["resolved"] = True
+            self._store.async_delay_save(self._data_to_save, _FINDING_SAVE_DELAY)
+        self._notify_listeners()
+        return True
+
+    async def async_resolve_configured_devices(
+        self, configured_devices: list[Mapping[str, Any]]
+    ) -> int:
+        """Resolve historical findings that already have a config entry."""
+        changed = 0
+        async with self._lock:
+            for finding in self.findings.values():
+                criteria = finding.get("device_criteria")
+                if (
+                    finding.get("dismissed")
+                    or finding.get("resolved")
+                    or not isinstance(criteria, Mapping)
+                    or not any(
+                        criteria_match(criteria, candidate)
+                        for candidate in configured_devices
+                    )
+                ):
+                    continue
+                finding["resolved"] = True
+                changed += 1
+            if changed:
+                await self._async_save()
+        if changed:
+            self._notify_listeners()
+        return changed
 
     def active_flow_id(self, finding_id: str) -> str | None:
         """Return the most recent in-progress flow associated with a finding."""

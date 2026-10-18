@@ -21,6 +21,7 @@ from .const import (
     DEFAULT_OPTIONS,
     DOMAIN,
 )
+from .identity import device_criteria
 from .monitor import DiscoveryMonitor
 from .storage import DiscoveryStore
 
@@ -111,6 +112,21 @@ async def _async_start_monitor(
     if hasattr(hass, "config"):
         storage = DiscoveryStore(hass)
         await storage.async_load()
+        configured_devices = [
+            criteria
+            for entry in hass.config_entries.async_entries()
+            if entry.unique_id is not None
+            and (
+                criteria := device_criteria(
+                    entry.domain,
+                    str(entry.source),
+                    entry.unique_id,
+                    {},
+                )
+            )
+            is not None
+        ]
+        await storage.async_resolve_configured_devices(configured_devices)
         _remove_legacy_discovery_issues(hass)
     monitor = DiscoveryMonitor(hass, options, storage)
     hass.data[DOMAIN] = monitor

@@ -262,3 +262,69 @@ async def test_summary_listeners_receive_changes_and_can_unsubscribe() -> None:
         flow_id="flow-three",
     )
     assert calls == 5
+
+
+@pytest.mark.asyncio
+async def test_removed_flow_is_resolved_and_rediscovery_reopens_finding() -> None:
+    storage = make_store()
+    device = {"domain": "example", "unique_id": "returning-device"}
+    finding_id = await storage.async_record(
+        domain="example",
+        source="dhcp",
+        label="Returning device",
+        device=device,
+        device_type=None,
+        fallback={},
+        flow_id="first-flow",
+    )
+
+    assert await storage.async_mark_flow_removed("first-flow")
+    assert storage.findings[finding_id]["resolved"] is True
+    assert not storage.visible_findings()
+
+    repeated_id = await storage.async_record(
+        domain="example",
+        source="dhcp",
+        label="Returning device",
+        device=device,
+        device_type=None,
+        fallback={},
+        flow_id="rediscovered-flow",
+    )
+
+    assert repeated_id == finding_id
+    assert "resolved" not in storage.findings[finding_id]
+    assert storage.findings[finding_id]["count"] == 2
+    assert [item[0] for item in storage.visible_findings()] == [finding_id]
+
+
+@pytest.mark.asyncio
+async def test_existing_config_entry_resolves_matching_historical_finding() -> None:
+    storage = make_store()
+    matching_id = await storage.async_record(
+        domain="shelly",
+        source="zeroconf",
+        label="Configured Shelly",
+        device={"domain": "shelly", "unique_id": "shelly-plus"},
+        device_type=None,
+        fallback={},
+        flow_id="old-flow",
+    )
+    other_id = await storage.async_record(
+        domain="shelly",
+        source="zeroconf",
+        label="Other Shelly",
+        device={"domain": "shelly", "unique_id": "other"},
+        device_type=None,
+        fallback={},
+        flow_id="other-flow",
+    )
+
+    changed = await storage.async_resolve_configured_devices(
+        [{"domain": "shelly", "unique_id": "shelly-plus"}]
+    )
+
+    assert changed == 1
+    assert storage.findings[matching_id]["resolved"] is True
+    assert "resolved" not in storage.findings[other_id]
+    assert [item[0] for item in storage.visible_findings()] == [other_id]

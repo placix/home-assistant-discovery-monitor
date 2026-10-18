@@ -210,7 +210,10 @@ class DiscoveryMonitor:
 
     @callback
     def _async_flow_changed(self, change: str, flow_id: str) -> None:  # noqa: C901, PLR0911
-        """Handle an added discovery flow."""
+        """Handle the lifecycle of a discovery flow."""
+        if change == "removed":
+            self._schedule_flow_removed(flow_id)
+            return
         if change != "added" or self._already_seen(flow_id):
             return
 
@@ -363,6 +366,23 @@ class DiscoveryMonitor:
 
         # Lightweight unit-test hosts do not implement HomeAssistant's task helper.
         asyncio.get_running_loop().create_task(async_record())
+
+    def _schedule_flow_removed(self, flow_id: str) -> None:
+        """Resolve a finding after Home Assistant removes its discovery flow."""
+        if self.storage is None:
+            return
+
+        async def async_mark_flow_removed() -> None:
+            await self.storage.async_mark_flow_removed(flow_id)
+
+        create_task = getattr(self._hass, "async_create_task", None)
+        if callable(create_task):
+            create_task(
+                async_mark_flow_removed(),
+                f"Resolve completed discovery flow {flow_id}",
+            )
+            return
+        asyncio.get_running_loop().create_task(async_mark_flow_removed())
 
     @callback
     def _already_seen(self, flow_id: str) -> bool:

@@ -447,3 +447,24 @@ async def test_matching_ignore_rule_aborts_flow_but_still_logs() -> None:
     assert manager.aborted == ["ignored-flow"]
     assert storage.recorded
     bus.async_fire.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_removed_flow_resolves_its_finding() -> None:
+    monitor, manager, _ = make_monitor()
+
+    class FakeStorage:
+        def __init__(self) -> None:
+            self.removed_flow_id: str | None = None
+
+        async def async_mark_flow_removed(self, flow_id: str) -> bool:
+            self.removed_flow_id = flow_id
+            return True
+
+    storage = FakeStorage()
+    monitor.storage = storage
+
+    manager.listener("removed", "completed-flow")
+    await asyncio.sleep(0)
+
+    assert storage.removed_flow_id == "completed-flow"

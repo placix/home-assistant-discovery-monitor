@@ -20,6 +20,22 @@ recently seen visible findings. Ignored and deliberately hidden findings are
 excluded. The sensor is not attached to a device and no dashboard is changed
 automatically.
 
+To use the sensor as a shortcut from a dashboard, add a tile card such as:
+
+```yaml
+type: tile
+entity: sensor.discovery_monitor_open_discoveries
+name: Discovery Monitor
+tap_action:
+  action: navigate
+  navigation_path: /config/integrations/integration/discovery_monitor
+```
+
+The tile shows the current count and opens Discovery Monitor's integration page
+without navigating through Settings first. Home Assistant's native tile card
+cannot render the dynamic per-finding actions itself; those remain in the
+integration options.
+
 ## Event example
 
 ```yaml
@@ -88,6 +104,12 @@ Rules and the discovery log use Home Assistant's storage helper. Repeated
 identical finds update their first-seen time, last-seen time, and occurrence
 count rather than creating duplicates. At most the 100 most recently seen
 distinct findings are retained; ignore rules are not affected by this limit.
+
+When Home Assistant removes a discovery flow after it has been handled, its
+finding is marked resolved and no longer counts as open. If the corresponding
+config entry is later deleted and Home Assistant discovers the device again,
+the stored finding is reopened automatically. This is separate from dismissing
+or ignoring a finding, both of which remain deliberate user choices.
 
 ## Automation example
 
@@ -202,5 +224,5 @@ pytest
 GitHub release drafts are created automatically when a maintainer deliberately
 pushes a `v*` version tag.
 
-Version `0.2.7` targets Home Assistant 2026.9 or newer. The project is licensed
+Version `0.2.8` targets Home Assistant 2026.9 or newer. The project is licensed
 under the [MIT License](LICENSE).
