@@ -250,5 +250,5 @@ tests separately cover the real Home Assistant WebSocket API and panel lifecycle
 GitHub release drafts are created automatically when a maintainer deliberately
 pushes a `v*` version tag.
 
-Version `0.2.8` targets Home Assistant 2026.9 or newer. The project is licensed
+Version `0.2.9` targets Home Assistant 2026.9 or newer. The project is licensed
 under the [MIT License](LICENSE).
