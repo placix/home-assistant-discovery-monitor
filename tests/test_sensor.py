@@ -119,11 +119,7 @@ async def test_ui_setup_registers_one_sensor_without_a_device(
     assert entities[0].entity_id == "sensor.discovery_monitor_open_discoveries"
     assert entities[0].unique_id == "discovery_monitor_open_discoveries"
     assert hass.states.get(entities[0].entity_id).state == "0"
-    assert not [
-        device
-        for device in dr.async_get(hass).devices.values()
-        if entry.entry_id in device.config_entries
-    ]
+    assert not dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)
 
     monitor = hass.data[DOMAIN]
     assert len(monitor.storage._listeners) == 1
