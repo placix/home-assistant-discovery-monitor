@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
-from homeassistant.const import EVENT_HOMEASSISTANT_STOP
+from homeassistant.const import EVENT_HOMEASSISTANT_STOP, Platform
 from homeassistant.core import callback
 from homeassistant.helpers import issue_registry as ir
 
@@ -66,6 +66,8 @@ CONFIG_SCHEMA = vol.Schema(
     extra=vol.ALLOW_EXTRA,
 )
 
+PLATFORMS = [Platform.SENSOR]
+
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up Discovery Monitor from YAML, when configured there."""
@@ -78,17 +80,20 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up the UI entry without creating entities."""
+    """Set up the UI entry and its discovery summary entity."""
     if DOMAIN not in hass.data:
         monitor = await _async_start_monitor(
             hass, DEFAULT_OPTIONS | dict(entry.options)
         )
         monitor.config_entry_id = entry.entry_id
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a UI-owned monitor while leaving YAML setup active."""
+    if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
+        return False
     monitor = hass.data.get(DOMAIN)
     if getattr(monitor, "config_entry_id", None) == entry.entry_id:
         monitor.async_stop()

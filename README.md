@@ -12,6 +12,14 @@ useful payload. Discovery Monitor observes the corresponding user-visible config
 flows and fires `discovery_monitor_discovered` with the information Home Assistant
 still has at that point.
 
+The UI setup also creates one diagnostic sensor,
+`sensor.discovery_monitor_open_discoveries`. Its state is the number of distinct
+discoveries currently visible under **Recent discoveries**. The
+`recent_discoveries` attribute contains a safe summary of up to five most
+recently seen visible findings. Ignored and deliberately hidden findings are
+excluded. The sensor is not attached to a device and no dashboard is changed
+automatically.
+
 ## Event example
 
 ```yaml
@@ -71,9 +79,10 @@ stable information, that choice is not shown.
 
 Creating a rule immediately aborts the finding's current discovery flow when it
 still exists. Matching future flows are logged and aborted before they remain
-visible as normal new-device discoveries. No entities are created. Rules can be
-removed from the separate **Ignored devices and device types** options page;
-removing a rule affects only future discoveries.
+visible as normal new-device discoveries. Rules can be removed from the separate
+**Ignored devices and device types** options page; removing a rule affects only
+future discoveries and makes matching stored findings visible again. Apart from
+the single diagnostic summary sensor, no entities are created for discoveries.
 
 Rules and the discovery log use Home Assistant's storage helper. Repeated
 identical finds update their first-seen time, last-seen time, and occurrence
@@ -193,5 +202,5 @@ pytest
 GitHub release drafts are created automatically when a maintainer deliberately
 pushes a `v*` version tag.
 
-Version `0.2.6` targets Home Assistant 2026.9 or newer. The project is licensed
+Version `0.2.7` targets Home Assistant 2026.9 or newer. The project is licensed
 under the [MIT License](LICENSE).

@@ -57,6 +57,22 @@ class FakeStorage:
                 return rule
         return None
 
+    def visible_findings(self) -> list[tuple[str, dict[str, Any]]]:
+        """Return findings using the production visibility rule."""
+        return [
+            (finding_id, finding)
+            for finding_id, finding in sorted(
+                self.findings.items(),
+                key=lambda item: str(item[1].get("last_seen", "")),
+                reverse=True,
+            )
+            if not finding.get("dismissed")
+            and self.matching_rule(
+                finding.get("device_criteria"), finding.get("type_criteria")
+            )
+            is None
+        ]
+
     async def async_remove_rule(self, rule_id: str) -> bool:
         self.removed.append(rule_id)
         old_length = len(self.rules)

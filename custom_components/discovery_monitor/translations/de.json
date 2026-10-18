@@ -1,5 +1,12 @@
 {
   "title": "Discovery Monitor",
+  "entity": {
+    "sensor": {
+      "open_discoveries": {
+        "name": "Offene Funde"
+      }
+    }
+  },
   "common": {
     "device": "Gerät",
     "device_type": "Gerätetyp",
@@ -17,7 +24,7 @@
     "step": {
       "user": {
         "title": "Discovery Monitor",
-        "description": "Discovery Monitor einrichten. Es werden keine Entitäten angelegt."
+        "description": "Discovery Monitor und den Sensor für offene Funde einrichten."
       }
     },
     "abort": {

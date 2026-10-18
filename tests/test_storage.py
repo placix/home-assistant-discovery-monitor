@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from custom_components.discovery_monitor.identity import DEVICE
+from custom_components.discovery_monitor.identity import DEVICE, DEVICE_TYPE
 from custom_components.discovery_monitor.storage import MAX_FINDINGS, DiscoveryStore
 
 
@@ -32,6 +32,7 @@ def make_store() -> DiscoveryStore:
     storage.rules = []
     storage.findings = {}
     storage._active_flow_ids = {}
+    storage._listeners = set()
     return storage
 
 
@@ -179,3 +180,85 @@ async def test_rapid_findings_use_delayed_storage_instead_of_individual_saves() 
     assert storage._store.save_calls == 0
     assert storage._store.delay_calls == 3
     assert len(storage._store.delayed_data()["findings"]) == 3
+
+
+@pytest.mark.asyncio
+async def test_visible_findings_share_ignore_and_dismiss_rules() -> None:
+    storage = make_store()
+    first_id = await storage.async_record(
+        domain="example",
+        source="dhcp",
+        label="First",
+        device={"domain": "example", "unique_id": "first"},
+        device_type={"domain": "example", "model": "one"},
+        fallback={},
+        flow_id="flow-first",
+    )
+    second_id = await storage.async_record(
+        domain="example",
+        source="dhcp",
+        label="Second",
+        device={"domain": "example", "unique_id": "second"},
+        device_type={"domain": "example", "model": "two"},
+        fallback={},
+        flow_id="flow-second",
+    )
+
+    assert {item[0] for item in storage.visible_findings()} == {first_id, second_id}
+
+    assert await storage.async_add_rule(first_id, DEVICE_TYPE)
+    assert [item[0] for item in storage.visible_findings()] == [second_id]
+
+    rule_id = storage.rule_id(storage.rules[0])
+    assert await storage.async_remove_rule(rule_id)
+    assert {item[0] for item in storage.visible_findings()} == {first_id, second_id}
+
+    assert await storage.async_dismiss_finding(second_id)
+    assert [item[0] for item in storage.visible_findings()] == [first_id]
+
+
+@pytest.mark.asyncio
+async def test_summary_listeners_receive_changes_and_can_unsubscribe() -> None:
+    storage = make_store()
+    calls = 0
+
+    def listener() -> None:
+        nonlocal calls
+        calls += 1
+
+    unsubscribe = storage.async_subscribe(listener)
+    finding_id = await storage.async_record(
+        domain="example",
+        source="dhcp",
+        label="Example",
+        device={"domain": "example", "unique_id": "one"},
+        device_type=None,
+        fallback={},
+        flow_id="flow-one",
+    )
+    await storage.async_record(
+        domain="example",
+        source="dhcp",
+        label="Example",
+        device={"domain": "example", "unique_id": "one"},
+        device_type=None,
+        fallback={},
+        flow_id="flow-two",
+    )
+    assert await storage.async_add_rule(finding_id, DEVICE)
+    rule_id = storage.rule_id(storage.rules[0])
+    assert await storage.async_remove_rule(rule_id)
+    assert await storage.async_dismiss_finding(finding_id)
+    assert calls == 5
+
+    unsubscribe()
+    await storage.async_record(
+        domain="example",
+        source="dhcp",
+        label="Another",
+        device={"domain": "example", "unique_id": "two"},
+        device_type=None,
+        fallback={},
+        flow_id="flow-three",
+    )
+    assert calls == 5

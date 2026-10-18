@@ -82,18 +82,7 @@ class DiscoveryOptionsFlow(config_entries.OptionsFlow):
     ) -> config_entries.ConfigFlowResult:
         """Select a recent discovery without exposing technical identifiers."""
         storage = self._storage
-        findings = storage.findings if storage is not None else {}
-
-        visible_findings = [
-            (finding_id, finding)
-            for finding_id, finding in sorted(
-                findings.items(),
-                key=lambda item: str(item[1].get("last_seen", "")),
-                reverse=True,
-            )
-            if not finding.get("dismissed")
-            and (storage is None or not _finding_is_ignored(storage, finding))
-        ]
+        visible_findings = storage.visible_findings() if storage is not None else []
         if user_input is not None:
             if isinstance(finding_id := user_input.get("finding"), str):
                 self._selected_finding_id = finding_id
@@ -254,19 +243,6 @@ class DiscoveryOptionsFlow(config_entries.OptionsFlow):
                 "unknown",
             )
         }
-
-
-def _finding_is_ignored(storage: DiscoveryStore, finding: Mapping[str, Any]) -> bool:
-    """Return whether an existing rule matches a stored finding."""
-    device = finding.get("device_criteria")
-    device_type = finding.get("type_criteria")
-    return (
-        storage.matching_rule(
-            device if isinstance(device, Mapping) else None,
-            device_type if isinstance(device_type, Mapping) else None,
-        )
-        is not None
-    )
 
 
 def _finding_label(finding: Mapping[str, Any], texts: Mapping[str, str]) -> str:

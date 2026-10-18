@@ -1,5 +1,12 @@
 {
   "title": "Discovery Monitor",
+  "entity": {
+    "sensor": {
+      "open_discoveries": {
+        "name": "Open discoveries"
+      }
+    }
+  },
   "common": {
     "device": "Device",
     "device_type": "Device type",
@@ -17,7 +24,7 @@
     "step": {
       "user": {
         "title": "Discovery Monitor",
-        "description": "Set up Discovery Monitor. It does not create entities."
+        "description": "Set up Discovery Monitor and its discovery summary sensor."
       }
     },
     "abort": {
