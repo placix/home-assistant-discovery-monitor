@@ -1,5 +1,5 @@
-homeassistant==2026.9.4
-home-assistant-frontend==20260826.7
+homeassistant==2026.10.4
+home-assistant-frontend==20260930.5
 pytest-homeassistant-custom-component
 pytest-cov
 ruff
