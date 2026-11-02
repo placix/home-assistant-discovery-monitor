@@ -1,7 +1,7 @@
 # Home Assistant Discovery Monitor
 
 [![Validate](https://github.com/placix/home-assistant-discovery-monitor/actions/workflows/validate.yml/badge.svg)](https://github.com/placix/home-assistant-discovery-monitor/actions/workflows/validate.yml)
-[![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://www.hacs.xyz/)
+[![HACS](https://img.shields.io/badge/HACS-Integration-41BDF5.svg)](https://www.hacs.xyz/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 Discovery Monitor is a Home Assistant custom integration that exposes useful,
@@ -73,12 +73,23 @@ Fields unavailable from a particular discovery source are `null`. The
 
 ## Installation
 
-### HACS custom repository
+### HACS (recommended)
 
-1. In HACS, open **Integrations**, then the menu and **Custom repositories**.
+1. Open **HACS** in Home Assistant.
+2. Search for **Discovery Monitor**.
+3. Open **Home Assistant Discovery Monitor** and download the integration.
+4. Restart Home Assistant.
+5. Under **Settings → Devices & services**, select **Add integration** and search
+   for **Discovery Monitor**.
+
+### HACS custom repository (fallback)
+
+If Discovery Monitor does not appear in HACS search, add it manually:
+
+1. In HACS, open the three-dot menu and select **Custom repositories**.
 2. Add `https://github.com/placix/home-assistant-discovery-monitor` as an
    **Integration** repository.
-3. Install **Discovery Monitor**.
+3. Find **Discovery Monitor** in HACS and download the integration.
 4. Restart Home Assistant.
 5. Add **Discovery Monitor** under **Settings → Devices & services**.
 
