@@ -3,6 +3,7 @@
 [![Validate](https://github.com/placix/home-assistant-discovery-monitor/actions/workflows/validate.yml/badge.svg)](https://github.com/placix/home-assistant-discovery-monitor/actions/workflows/validate.yml)
 [![HACS](https://img.shields.io/badge/HACS-Integration-41BDF5.svg)](https://www.hacs.xyz/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![AI Assisted Codex](https://img.shields.io/badge/AI%20Assisted-Codex-blue?logo=openai&logoColor=white)
 
 Discovery Monitor is a Home Assistant custom integration that exposes useful,
 sanitized details about newly discovered integrations as an event.
@@ -263,3 +264,11 @@ pushes a `v*` version tag.
 
 Version `0.2.10` targets Home Assistant 2026.9 or newer. The project is licensed
 under the [MIT License](LICENSE).
+
+## AI-Assisted Development
+
+This project is developed with the assistance of OpenAI Codex. AI tools support
+code development, refactoring, testing, and documentation.
+
+AI-generated contributions are reviewed and validated before being incorporated
+into the project.
