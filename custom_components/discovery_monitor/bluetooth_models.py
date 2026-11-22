@@ -18,6 +18,7 @@ _VICTRON_MIN_LENGTH = 20
 _VICTRON_PRODUCT_ADVERTISEMENT = 0x10
 _MANUFACTURER_KEY_MAX = 0xFFFF
 _THERMOPRO_PAYLOAD_LENGTH = 5
+_GOVEE_MIN_LENGTH = 6
 _VICTRON_MODELS = {
     "a053": "SmartSolar MPPT 75/15",
     "a054": "SmartSolar MPPT 75/10",
@@ -69,23 +70,29 @@ def detect_model(domain: str, source: str, info: Any) -> ModelDetection:
     if source != "bluetooth" or domain not in _PROFILES:
         return ModelDetection(None, None, "no_profile")
     try:
-        name = (
-            info.get("name")
-            if isinstance(info, Mapping)
-            else getattr(info, "name", None)
-        )
+        # Real HA service info can fall back to BLEDevice.name or the address.
+        # Prefer the public AdvertisementData local_name when it is available;
+        # a cached/display name is not evidence of an advertised model token.
+        if isinstance(info, Mapping):
+            name = info.get("name")
+        elif (advertisement := getattr(info, "advertisement", None)) is not None:
+            name = advertisement.local_name
+        else:
+            name = getattr(info, "name", None)
         data = (
             info.get("manufacturer_data")
             if isinstance(info, Mapping)
             else getattr(info, "manufacturer_data", None)
         )
-        if not isinstance(data, Mapping):
+        if data is None or (isinstance(data, Mapping) and not data):
             return ModelDetection(None, None, "missing_manufacturer_data")
-        model = _PROFILES[domain](name, data)
+        if not isinstance(data, Mapping):
+            return ModelDetection(None, None, "invalid_advertisement")
+        model, reason = _PROFILES[domain](name, data)
     except AttributeError, TypeError, ValueError:
         return ModelDetection(None, None, "invalid_advertisement")
     if model is None:
-        return ModelDetection(None, None, "unsupported_or_incomplete_model")
+        return ModelDetection(None, None, reason)
     criteria = {
         "domain": domain,
         "profile": "bluetooth_model",
@@ -95,55 +102,77 @@ def detect_model(domain: str, source: str, info: Any) -> ModelDetection:
     return ModelDetection(criteria, model_label(criteria), "model_recognized")
 
 
-def _victron(_name: Any, data: Mapping[Any, Any]) -> str | None:
+def _victron(_name: Any, data: Mapping[Any, Any]) -> tuple[str | None, str]:
     """Use the cleartext product ID, never the generic Victron record type."""
     packet = data.get(0x02E1)
     # Product Advertisement, known exact model, Solar Charger record with at
     # least the mandatory payload. Nonce, key-check byte and ciphertext ignored.
-    if (
-        not isinstance(packet, bytes)
-        or len(packet) < _VICTRON_MIN_LENGTH
-        or packet[0] != _VICTRON_PRODUCT_ADVERTISEMENT
-    ):
-        return None
-    model = f"{int.from_bytes(packet[2:4], 'little'):04x}"
-    return model if packet[4] == 1 and model in _VICTRON_MODELS else None
-
-
-def _govee(name: Any, data: Mapping[Any, Any]) -> str | None:
-    """Combine the protocol model token with its documented packet shape."""
-    if not isinstance(name, str) or _GOVEE_NAME.fullmatch(name) is None:
-        return None
-    packet = data.get(1)
+    if packet is None:
+        return None, "missing_model_data"
     if not isinstance(packet, bytes):
-        return None
+        return None, "invalid_advertisement"
+    if len(packet) < _VICTRON_MIN_LENGTH:
+        return None, "incomplete_advertisement"
+    if packet[0] != _VICTRON_PRODUCT_ADVERTISEMENT or packet[4] != 1:
+        return None, "unsupported_advertisement"
+    model = f"{int.from_bytes(packet[2:4], 'little'):04x}"
+    if model not in _VICTRON_MODELS:
+        return None, "unsupported_model"
+    return model, "model_recognized"
+
+
+def _govee(name: Any, data: Mapping[Any, Any]) -> tuple[str | None, str]:
+    """Combine the protocol model token with its documented packet shape."""
+    if reason := _model_name_issue(name, _GOVEE_NAME):
+        return None, reason
+    packet = data.get(1)
+    if packet is None:
+        return None, "missing_model_data"
+    if not isinstance(packet, bytes):
+        return None, "invalid_advertisement"
+    if len(packet) < _GOVEE_MIN_LENGTH:
+        return None, "incomplete_advertisement"
     # The upstream parser strips this 25-byte appended beacon from some frames.
     # Eight-byte messages belong to a different model and must not match.
     if len(packet) in (31, 32) and b"INTELLI_ROCKS" in packet[-25:]:
         packet = packet[:-25]
     if len(packet) in (6, 7) and packet[:2] == b"\x01\x01":
-        return "h5105"
-    return None
+        return "h5105", "model_recognized"
+    return None, "unsupported_advertisement"
 
 
-def _thermopro(name: Any, data: Mapping[Any, Any]) -> str | None:
+def _thermopro(name: Any, data: Mapping[Any, Any]) -> tuple[str | None, str]:
     """Require an exact protocol model token and the TP357S measurement format."""
-    if not isinstance(name, str) or _THERMOPRO_NAME.fullmatch(name) is None:
-        return None
+    if reason := _model_name_issue(name, _THERMOPRO_NAME):
+        return None, reason
     # ThermoPro encodes measurement bytes in the manufacturer key itself.
     # It is NOT a stable manufacturer identity. Multiple cached packets are OK.
-    if data and all(
+    if not all(
         type(key) is int
         and 0 <= key <= _MANUFACTURER_KEY_MAX
         and isinstance(value, bytes)
-        and len(value) == _THERMOPRO_PAYLOAD_LENGTH
         for key, value in data.items()
     ):
-        return "tp357s"
+        return None, "invalid_advertisement"
+    if any(len(value) < _THERMOPRO_PAYLOAD_LENGTH for value in data.values()):
+        return None, "incomplete_advertisement"
+    if all(len(value) == _THERMOPRO_PAYLOAD_LENGTH for value in data.values()):
+        return "tp357s", "model_recognized"
+    return None, "unsupported_advertisement"
+
+
+def _model_name_issue(name: Any, pattern: re.Pattern[str]) -> str | None:
+    """Distinguish missing protocol tokens from unsupported or invalid names."""
+    if not name:
+        return "missing_model_name"
+    if not isinstance(name, str):
+        return "invalid_advertisement"
+    if pattern.fullmatch(name) is None:
+        return "unsupported_model"
     return None
 
 
-_PROFILES: dict[str, Callable[[Any, Mapping[Any, Any]], str | None]] = {
+_PROFILES: dict[str, Callable[[Any, Mapping[Any, Any]], tuple[str | None, str]]] = {
     "victron_ble": _victron,
     "govee_ble": _govee,
     "thermopro": _thermopro,

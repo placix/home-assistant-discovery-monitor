@@ -117,6 +117,74 @@ def test_govee_extended_frame_and_thermopro_changing_measurements() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("domain", "info", "reason"),
+    [
+        (
+            "govee_ble",
+            {"name": "GVH5105_ABCD", "manufacturer_data": {}},
+            "missing_manufacturer_data",
+        ),
+        ("govee_ble", GOVEE | {"name": None}, "missing_model_name"),
+        ("govee_ble", GOVEE | {"name": "GVH9999_ABCD"}, "unsupported_model"),
+        (
+            "govee_ble",
+            GOVEE | {"manufacturer_data": {1: b"\x01\x01"}},
+            "incomplete_advertisement",
+        ),
+        (
+            "govee_ble",
+            GOVEE | {"manufacturer_data": {2: bytes(6)}},
+            "missing_model_data",
+        ),
+        (
+            "govee_ble",
+            GOVEE | {"manufacturer_data": {1: "not-bytes"}},
+            "invalid_advertisement",
+        ),
+        ("thermopro", THERMOPRO | {"name": None}, "missing_model_name"),
+        ("thermopro", THERMOPRO | {"name": "TP999 (ABCD)"}, "unsupported_model"),
+        (
+            "thermopro",
+            THERMOPRO | {"manufacturer_data": {194: bytes(4)}},
+            "incomplete_advertisement",
+        ),
+        (
+            "thermopro",
+            THERMOPRO | {"manufacturer_data": {194: bytes(6)}},
+            "unsupported_advertisement",
+        ),
+        (
+            "victron_ble",
+            {
+                "manufacturer_data": {
+                    0x02E1: bytes.fromhex("1000ffff01000000") + bytes(16)
+                }
+            },
+            "unsupported_model",
+        ),
+        (
+            "victron_ble",
+            {"manufacturer_data": {0x02E1: bytes.fromhex("100053a001")}},
+            "incomplete_advertisement",
+        ),
+        ("victron_ble", {"manufacturer_data": {1: bytes(20)}}, "missing_model_data"),
+        (
+            "victron_ble",
+            {"manufacturer_data": {0x02E1: "not-bytes"}},
+            "invalid_advertisement",
+        ),
+    ],
+)
+def test_failure_reasons_distinguish_evidence_from_support(
+    domain: str, info: Any, reason: str
+) -> None:
+    result = detect_model(domain, "bluetooth", info)
+    assert result.criteria is None
+    assert result.label is None
+    assert result.reason == reason
+
+
 async def test_model_rules_are_explicit_versioned_persisted_and_independent() -> None:
     storage = make_store()
     model = detect_model("govee_ble", "bluetooth", GOVEE).criteria

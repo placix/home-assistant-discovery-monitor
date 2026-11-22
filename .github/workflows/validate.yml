@@ -40,6 +40,23 @@ jobs:
         run: |
           python -m venv "$RUNNER_TEMP/discovery-ha11"
           "$RUNNER_TEMP/discovery-ha11/bin/python" -m pip install homeassistant==2026.11.2 home-assistant-frontend==20261028.6
+          "$RUNNER_TEMP/discovery-ha11/bin/python" - <<'PY'
+          import json
+          from pathlib import Path
+          import subprocess
+          import sys
+          import homeassistant
+
+          # Install the exact dependencies shipped in HA 2026.11.2's manifests
+          # so the test can use the public BluetoothServiceInfoBleak import.
+          root = Path(homeassistant.__file__).parent / "components"
+          requirements = [
+              requirement
+              for domain in ("bluetooth", "usb", "hassio")
+              for requirement in json.loads((root / domain / "manifest.json").read_text())["requirements"]
+          ]
+          subprocess.run([sys.executable, "-m", "pip", "install", *requirements], check=True)
+          PY
           "$RUNNER_TEMP/discovery-ha11/bin/python" -m tests.ha_compatibility
 
   validate-hacs:

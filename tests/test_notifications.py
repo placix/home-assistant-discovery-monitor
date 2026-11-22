@@ -19,9 +19,79 @@ from custom_components.discovery_monitor.notifications import (
     notification_key,
 )
 
+from .notification_races import check_reset_and_restart
 from .test_bluetooth_models import THERMOPRO
 from .test_monitor import add_flow, make_monitor
 from .test_storage import make_store
+
+
+@pytest.mark.parametrize("in_flight", [False, True])
+@pytest.mark.parametrize("emit_during_reset", [False, True])
+@pytest.mark.parametrize("resets", [1, 2])
+async def test_real_store_reset_races_and_restart(
+    *, in_flight: bool, emit_during_reset: bool, resets: int
+) -> None:
+    await check_reset_and_restart(
+        in_flight=in_flight, emit_during_reset=emit_during_reset, resets=resets
+    )
+
+
+async def test_immediate_repeat_burst_emits_once_without_delaying_history(
+    hass: Any,
+) -> None:
+    monitor, manager, bus = make_monitor({CONF_NOTIFICATION_PAUSE_HOURS: 24})
+    monitor.notifications = NotificationHistory(hass)
+    monitor.storage = make_store()
+    for number in range(100):
+        bluetooth_flow(manager, f"burst-{number}")
+    assert bus.async_fire.call_count == 1
+    assert len(monitor.notifications.last_emitted) == 1
+    await asyncio.sleep(0)
+    assert next(iter(monitor.storage.findings.values()))["count"] == 100
+    assert not manager.aborted
+    await monitor.notifications.async_reset()
+    bluetooth_flow(manager, "after-reset")
+    bluetooth_flow(manager, "repeat-after-reset")
+    assert bus.async_fire.call_count == 2
+    await asyncio.sleep(0)
+    assert next(iter(monitor.storage.findings.values()))["count"] == 102
+
+
+@pytest.mark.parametrize("restart", [False, True])
+async def test_removing_model_rule_reports_same_stored_discovery_again(
+    *,
+    restart: bool,
+) -> None:
+    monitor, manager, bus = make_monitor()
+    monitor.notifications = make_history()
+    storage = monitor.storage = make_store()
+    bluetooth_flow(manager, "first")
+    await asyncio.sleep(0)
+    fid = next(iter(storage.findings))
+    assert await monitor.async_ignore_finding(fid, "model")
+    bluetooth_flow(manager, "ignored-same-address")
+    bluetooth_flow(manager, "ignored-other-address", "C0:11:22:33:44:56")
+    await asyncio.sleep(0)
+    assert bus.async_fire.call_count == 1
+    assert await storage.async_remove_rule(storage.rule_id(storage.rules[0]))
+    saved_findings = deepcopy(storage.findings)
+    if restart:
+        restored = make_store()
+        restored._store.async_load = AsyncMock(
+            return_value=deepcopy(storage._store.saved)
+        )
+        await restored.async_load()
+        monitor.storage = storage = restored
+    assert storage.findings == saved_findings
+    aborted = list(manager.aborted)
+    bluetooth_flow(manager, "allowed-same-address")
+    bluetooth_flow(manager, "allowed-other-address", "C0:11:22:33:44:56")
+    await asyncio.sleep(0)
+    assert bus.async_fire.call_count == 3
+    assert manager.aborted == aborted
+    assert storage.findings[fid]["count"] == 3
+    assert len(storage.findings) == 2
+    assert len(storage.visible_findings()) == 2
 
 
 def make_history() -> NotificationHistory:

@@ -26,6 +26,8 @@ names or title placeholders. Manufacturer identifiers and service UUIDs alone
 never establish a model. Missing, unsupported or contradictory data means no model
 action. In particular, the eight-byte Govee message format is not treated as H5105.
 Old findings without this evidence gain no model action until recognized again.
+For real HA Bluetooth objects the public advertisement's `local_name` is used;
+a cached `BLEDevice.name` fallback cannot substitute for a missing local name.
 
 Model rules use a separate `model` kind and exact versioned criteria:
 `domain`, `profile: bluetooth_model`, `version: 1`, and `model`.
@@ -95,6 +97,8 @@ correlation reference, recognized model or recognition failure, checked rule
 types/counts and the event/ignore/pause decision. They exclude raw addresses,
 unique IDs, flow IDs, arbitrary device names, keys and advertisement contents.
 Unknown identity or unsupported model evidence is reported without dumping it.
+Missing manufacturer data, missing model names/data, truncated advertisements,
+unsupported model tokens and unsupported packet formats have distinct reasons.
 
 ## Extending recognition and validation
 
@@ -120,6 +124,10 @@ and storage for repeat notifications, resetting/reloading pauses, explicit model
 rules, new addresses, incomplete discovery data and listener cleanup. Only the
 Bluetooth integration handler's confirmation step is substituted; it does not
 simulate a radio or establish which physical devices sent real-world addresses.
+The test installs Bluetooth import dependencies from HA 2026.11.2's own manifests
+and constructs real `BluetoothServiceInfoBleak` objects via `from_scan`.
+Reset tests overlap pending/in-flight writes, concurrent resets and new events,
+then read the resulting file and load it in a fresh Home Assistant instance.
 The compatibility test complements the complete pytest suite; it is not a full
 HA 2026.11 end-to-end integration or hardware test.
 
