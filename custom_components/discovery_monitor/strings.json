@@ -8,6 +8,11 @@
     }
   },
   "common": {
+    "model": "Model",
+    "model_scope_label": "Scope",
+    "model_scope": "All recognized devices of this model within this integration",
+    "ignore_model": "Ignore all devices of model {model}",
+    "panel_confirm_model": "Ignore all reliably recognized devices of model {model} in {integration}, including other Bluetooth addresses. This discovery's current flow will be removed. Other models remain allowed.",
     "device": "Device",
     "device_type": "Device type",
     "integration": "Integration",
@@ -60,8 +65,22 @@
         "title": "Discovery Monitor",
         "menu_options": {
           "recent_findings": "Recent discoveries",
-          "ignored_items": "Ignored devices and device types"
+          "ignored_items": "Ignored devices and device types",
+          "notifications": "Notifications and diagnostics"
         }
+      },
+      "notifications": {
+        "title": "Notifications and diagnostics",
+        "description": "Pauses apply per identified discovery, not to an entire integration. 0 hours disables them (default); maximum 720 hours (30 days). The period starts with the last emitted event. New addresses remain separate. History and counters continue updating; discovery flows stay active. Diagnostics also require DEBUG logging for custom_components.discovery_monitor.",
+        "data": {
+          "notification_pause_hours": "Pause between notifications of the same discovery (hours)",
+          "debug_logging": "Explain discovery decisions in debug logs",
+          "reset_pauses": "Reset stored notification pauses"
+        }
+      },
+      "confirm_model": {
+        "title": "Ignore model",
+        "description": "Ignore all reliably recognized devices of model {model} in {integration}, including other Bluetooth addresses. This discovery's current flow will be removed. Other models remain allowed."
       },
       "recent_findings": {
         "title": "Recent discoveries",

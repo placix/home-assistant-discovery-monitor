@@ -30,8 +30,17 @@ jobs:
         run: python -m pip install -r requirements_test.txt
       - name: Run Ruff
         run: ruff check .
+      - name: Check formatting
+        run: ruff format --check .
       - name: Run tests
         run: pytest
+      - name: Check Home Assistant 2026.11 compatibility
+        # The current pytest fixture package pins HA 2026.10.4. Exercise the
+        # native 2026.11 flow APIs in a clean runtime without those fixtures.
+        run: |
+          python -m venv "$RUNNER_TEMP/discovery-ha11"
+          "$RUNNER_TEMP/discovery-ha11/bin/python" -m pip install homeassistant==2026.11.2 home-assistant-frontend==20261028.6
+          "$RUNNER_TEMP/discovery-ha11/bin/python" -m tests.ha_compatibility
 
   validate-hacs:
     runs-on: ubuntu-latest

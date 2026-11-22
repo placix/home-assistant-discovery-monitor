@@ -12,6 +12,7 @@ from typing import Any
 from homeassistant.core import CALLBACK_TYPE, callback
 from homeassistant.helpers.storage import Store
 
+from .bluetooth_models import MODEL, model_label
 from .const import DOMAIN
 from .identity import DEVICE, DEVICE_TYPE, criteria_match
 
@@ -54,10 +55,17 @@ class DiscoveryStore:
         self,
         device: Mapping[str, Any] | None,
         device_type: Mapping[str, Any] | None,
+        model: Mapping[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         """Return the first matching ignore rule."""
         for rule in self.rules:
-            candidate = device if rule["kind"] == DEVICE else device_type
+            candidate = (
+                model
+                if rule["kind"] == MODEL
+                else device
+                if rule["kind"] == DEVICE
+                else device_type
+            )
             if criteria_match(rule["criteria"], candidate):
                 return rule
         return None
@@ -80,10 +88,12 @@ class DiscoveryStore:
             return False
         device = finding.get("device_criteria")
         device_type = finding.get("type_criteria")
+        model = finding.get("model_criteria")
         return (
             self.matching_rule(
                 device if isinstance(device, Mapping) else None,
                 device_type if isinstance(device_type, Mapping) else None,
+                model if model_label(model) else None,
             )
             is None
         )
@@ -109,6 +119,7 @@ class DiscoveryStore:
         device_type: Mapping[str, Any] | None,
         fallback: Mapping[str, Any],
         flow_id: str,
+        model: Mapping[str, Any] | None = None,
     ) -> str:
         """Insert a finding or update its last occurrence and count."""
         async with self._lock:
@@ -142,6 +153,9 @@ class DiscoveryStore:
                     "device_criteria": dict(device) if device else None,
                     "type_criteria": dict(device_type) if device_type else None,
                 }
+            self.findings[finding_id]["model_criteria"] = (
+                dict(model) if model_label(model) else None
+            )
             self._active_flow_ids[finding_id] = flow_id
             self._trim_findings()
             self._store.async_delay_save(self._data_to_save, _FINDING_SAVE_DELAY)
@@ -214,18 +228,30 @@ class DiscoveryStore:
     async def async_add_rule(self, finding_id: str, kind: str) -> bool:
         """Create a rule from a logged finding if that identity is safe."""
         async with self._lock:
-            if kind not in {DEVICE, DEVICE_TYPE}:
+            if kind not in {DEVICE, DEVICE_TYPE, MODEL}:
                 return False
             finding = self.findings.get(finding_id)
-            field = "device_criteria" if kind == DEVICE else "type_criteria"
+            field = (
+                "model_criteria"
+                if kind == MODEL
+                else "device_criteria"
+                if kind == DEVICE
+                else "type_criteria"
+            )
             if finding is None or not isinstance(
                 criteria := finding.get(field), Mapping
             ):
                 return False
+            if kind == MODEL and not model_label(criteria):
+                return False
             rule = {
                 "kind": kind,
                 "criteria": dict(criteria),
-                "label": str(finding.get("label") or finding.get("domain") or "Gerät"),
+                "label": (
+                    model_label(criteria)
+                    if kind == MODEL
+                    else str(finding.get("label") or finding.get("domain") or "Gerät")
+                ),
                 "created_at": datetime.now(UTC).isoformat(),
             }
             if not any(
@@ -293,9 +319,10 @@ def _digest(value: Mapping[str, Any]) -> str:
 def _valid_rule(value: Any) -> bool:
     return (
         isinstance(value, Mapping)
-        and value.get("kind") in {DEVICE, DEVICE_TYPE}
+        and value.get("kind") in {DEVICE, DEVICE_TYPE, MODEL}
         and isinstance(value.get("criteria"), Mapping)
         and isinstance(value.get("label"), str)
         and isinstance(value.get("created_at"), str)
         and set(value) == {"kind", "criteria", "label", "created_at"}
+        and (value["kind"] != MODEL or model_label(value["criteria"]) is not None)
     )

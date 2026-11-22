@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
 from collections import deque
 from collections.abc import Mapping
@@ -14,6 +16,7 @@ from homeassistant import config_entries
 from homeassistant.core import CALLBACK_TYPE, callback
 from homeassistant.data_entry_flow import UnknownFlow
 
+from .bluetooth_models import ModelDetection, detect_model
 from .const import (
     CONF_DEBUG_LOGGING,
     CONF_ENABLED,
@@ -22,14 +25,17 @@ from .const import (
     CONF_INCLUDE_DISCOVERY_DATA,
     CONF_INCLUDE_DOMAINS,
     CONF_INCLUDE_SOURCES,
+    CONF_NOTIFICATION_PAUSE_HOURS,
     DEFAULT_OPTIONS,
     EVENT_DISCOVERED,
 )
 from .identity import device_criteria, type_criteria
+from .notifications import notification_key
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
 
+    from .notifications import NotificationHistory
     from .storage import DiscoveryStore
 
 _LOGGER = logging.getLogger(__name__)
@@ -153,15 +159,27 @@ class DiscoveryMonitor:
         hass: HomeAssistant,
         options: Mapping[str, Any],
         storage: DiscoveryStore | None = None,
+        notifications: NotificationHistory | None = None,
     ) -> None:
         """Initialize the monitor."""
         self._hass = hass
         self._options = options
         self.storage = storage
+        self.notifications = notifications
         self._unsubscribe: CALLBACK_TYPE | None = None
         self._adapter = FlowDataAdapter(hass.config_entries.flow)
         self._seen_flow_ids: set[str] = set()
         self._seen_order: deque[str] = deque()
+
+    @callback
+    def async_update_options(self, options: Mapping[str, Any]) -> None:
+        """Apply explicit UI overrides without discarding YAML filters."""
+        self._options = dict(self._options) | dict(options)
+
+    @property
+    def options(self) -> dict[str, Any]:
+        """Return effective configuration for the options UI."""
+        return DEFAULT_OPTIONS | dict(self._options)
 
     @callback
     def async_start(self) -> None:
@@ -202,10 +220,7 @@ class DiscoveryMonitor:
             try:
                 self._hass.config_entries.flow.async_abort(flow_id)
             except AttributeError, UnknownFlow, KeyError, TypeError:
-                _LOGGER.debug(
-                    "Discovery flow %s disappeared before it could be ignored",
-                    flow_id,
-                )
+                _LOGGER.debug("Discovery flow disappeared before it could be ignored")
         return True
 
     @callback
@@ -224,7 +239,7 @@ class DiscoveryMonitor:
         try:
             flow = self._hass.config_entries.flow.async_get(flow_id)
         except AttributeError, UnknownFlow, KeyError, TypeError:
-            _LOGGER.debug("Discovery flow %s disappeared before inspection", flow_id)
+            _LOGGER.debug("Discovery flow disappeared before inspection")
             return
 
         context = flow.get("context")
@@ -264,9 +279,15 @@ class DiscoveryMonitor:
         unique_id = _as_string(context.get("unique_id"))
         device = device_criteria(domain, source, unique_id, discovery_data)
         device_type = type_criteria(domain, source, discovery_data)
+        model = detect_model(domain, source, init_data)
         label = _first_string(title, device_name, domain) or domain
 
-        if self.storage is not None and self.storage.matching_rule(device, device_type):
+        rule = (
+            self.storage.matching_rule(device, device_type, model.criteria)
+            if self.storage is not None
+            else None
+        )
+        if rule:
             self._schedule_record(
                 flow_id,
                 domain,
@@ -275,18 +296,19 @@ class DiscoveryMonitor:
                 device,
                 device_type,
                 discovery_data,
+                model.criteria,
             )
             try:
                 self._hass.config_entries.flow.async_abort(flow_id)
             except AttributeError, UnknownFlow, KeyError, TypeError:
                 _LOGGER.debug(
-                    "Ignored discovery flow %s disappeared before it could be aborted",
-                    flow_id,
+                    "Ignored discovery flow disappeared before it could be aborted"
                 )
-            _LOGGER.info("Suppressed an ignored discovery for %s", label)
+            self._debug_decision(domain, source, device, model, "ignore_rule", rule)
             return
 
         if not _matches_filters(domain, source, options):
+            self._debug_decision(domain, source, device, model, "configured_filter")
             return
 
         event_data: dict[str, Any] = {
@@ -309,15 +331,62 @@ class DiscoveryMonitor:
             device,
             device_type,
             discovery_data,
+            model.criteria,
         )
+        hours = options[CONF_NOTIFICATION_PAUSE_HOURS]
+        key = notification_key(domain, source, device, discovery_data)
+        if self.notifications is not None and self.notifications.is_paused(key, hours):
+            self._debug_decision(domain, source, device, model, "notification_pause")
+            return
         self._hass.bus.async_fire(EVENT_DISCOVERED, event_data)
-        if options[CONF_DEBUG_LOGGING]:
-            _LOGGER.debug(
-                "Reported discovery flow %s for %s from %s",
-                flow_id,
-                domain,
-                source,
-            )
+        if self.notifications is not None and key:
+            self.notifications.async_event_emitted(key)
+        reason = (
+            "event_emitted_pause_disabled"
+            if hours <= 0
+            else "event_emitted_identity_unavailable"
+            if key is None
+            else "event_emitted_pause_elapsed_or_new"
+        )
+        self._debug_decision(domain, source, device, model, reason)
+
+    def _debug_decision(  # noqa: PLR0913, PLR0917
+        self,
+        domain: str,
+        source: str,
+        device: Mapping[str, Any] | None,
+        model: ModelDetection,
+        reason: str,
+        rule: Mapping[str, Any] | None = None,
+    ) -> None:
+        """Log bounded decisions, never raw IDs, names or advertisement contents."""
+        if not self.options[CONF_DEBUG_LOGGING]:
+            return
+        token = hashlib.sha256(
+            json.dumps(dict(device or {}), sort_keys=True).encode()
+        ).hexdigest()[:12]
+        identity_source = (
+            ",".join(sorted(key for key in (device or {}) if key != "domain"))
+            or "unavailable"
+        )
+        rules = getattr(self.storage, "rules", [])
+        counts = {
+            kind: sum(item.get("kind") == kind for item in rules)
+            for kind in ("device", "device_type", "model")
+        }
+        _LOGGER.debug(
+            "Discovery decision domain=%s source=%s identity_source=%s identity_ref=%s "
+            "model=%s model_result=%s checked_rules=%s matched_kind=%s reason=%s",
+            domain,
+            source,
+            identity_source,
+            token,
+            model.label or "unavailable",
+            model.reason,
+            counts,
+            rule.get("kind") if rule else "none",
+            reason,
+        )
 
     def _schedule_record(  # noqa: PLR0913, PLR0917
         self,
@@ -328,6 +397,7 @@ class DiscoveryMonitor:
         device: Mapping[str, Any] | None,
         device_type: Mapping[str, Any] | None,
         discovery_data: Mapping[str, Any],
+        model: Mapping[str, Any] | None = None,
     ) -> None:
         """Persist a finding without delaying the flow callback."""
         if self.storage is None:
@@ -357,6 +427,7 @@ class DiscoveryMonitor:
                 device_type=device_type,
                 fallback=fallback,
                 flow_id=flow_id,
+                model=model,
             )
 
         create_task = getattr(self._hass, "async_create_task", None)
@@ -476,10 +547,8 @@ def _safe_object_attributes(data: Any) -> list[tuple[str, Any]]:
             value = getattr(data, field_name)
         except AttributeError:
             continue
-        except Exception:
-            _LOGGER.debug(
-                "Unable to read safe discovery field %s", field_name, exc_info=True
-            )
+        except Exception:  # noqa: BLE001 - third-party properties may raise; do not log data
+            _LOGGER.debug("Unable to read safe discovery field %s", field_name)
             continue
         values.append((field_name, value))
     return values

@@ -8,11 +8,14 @@ import pytest
 from homeassistant.components import frontend
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.discovery_monitor.bluetooth_models import detect_model
 from custom_components.discovery_monitor.const import DOMAIN
 from custom_components.discovery_monitor.panel import (
     PANEL_PATH,
     async_setup_panel,
 )
+
+from .test_bluetooth_models import GOVEE
 
 
 @pytest.fixture
@@ -44,9 +47,16 @@ async def subscribe(client: Any, language: str = "en") -> dict[str, Any]:
     return (await client.receive_json())["event"]
 
 
-async def action(client: Any, operation: str, target: str) -> dict[str, Any]:
+async def action(
+    client: Any, operation: str, target: str, expected_model: str | None = None
+) -> dict[str, Any]:
     await client.send_json_auto_id(
-        {"type": f"{DOMAIN}/action", "action": operation, "target": target}
+        {
+            "type": f"{DOMAIN}/action",
+            "action": operation,
+            "target": target,
+            **({"expected_model": expected_model} if expected_model else {}),
+        }
     )
     return await client.receive_json()
 
@@ -100,15 +110,26 @@ async def test_panel_live_snapshot_translations_and_unsubscribe(
     assert len(storage._listeners) == initial_listeners
 
 
-@pytest.mark.parametrize("operation", ["device", "device_type"])
+@pytest.mark.parametrize("operation", ["device", "device_type", "model"])
 async def test_panel_ignore_and_unignore_reuse_monitor(
     hass: Any, panel_entry: Any, hass_ws_client: Any, operation: str
 ) -> None:
     finding_id = await record(hass)
+    if operation == "model":
+        hass.data[DOMAIN].storage.findings[finding_id]["model_criteria"] = detect_model(
+            "govee_ble", "bluetooth", GOVEE
+        ).criteria
     client = await hass_ws_client()
     monitor = hass.data[DOMAIN]
     with patch.object(hass.config_entries.flow, "async_abort") as abort:
-        assert (await action(client, operation, finding_id))["success"]
+        assert (
+            await action(
+                client,
+                operation,
+                finding_id,
+                "Govee H5105" if operation == "model" else None,
+            )
+        )["success"]
     abort.assert_called_once_with("private-flow")
     assert not monitor.storage.visible_findings()
     rule_id = monitor.storage.rule_id(monitor.storage.rules[0])
@@ -131,6 +152,21 @@ async def test_panel_dismiss_preserves_history_without_ignoring(
     assert response["error"]["code"] == "stale_target"
 
 
+async def test_panel_model_confirmation_rejects_missing_or_changed_model(
+    hass: Any, panel_entry: Any, hass_ws_client: Any
+) -> None:
+    fid = await record(hass)
+    storage = hass.data[DOMAIN].storage
+    storage.findings[fid]["model_criteria"] = detect_model(
+        "govee_ble", "bluetooth", GOVEE
+    ).criteria
+    client = await hass_ws_client()
+    for expected in (None, "ThermoPro TP357S"):
+        result = await action(client, "model", fid, expected)
+        assert result["error"]["code"] == "stale_target"
+    assert not storage.rules
+
+
 async def test_panel_rejects_unsafe_missing_and_invalid_actions(
     hass: Any, panel_entry: Any, hass_ws_client: Any
 ) -> None:
@@ -142,6 +178,7 @@ async def test_panel_rejects_unsafe_missing_and_invalid_actions(
     for operation, target in [
         ("device", finding_id),
         ("device_type", finding_id),
+        ("model", finding_id),
         ("dismiss", "missing"),
         ("unignore", "missing"),
     ]:

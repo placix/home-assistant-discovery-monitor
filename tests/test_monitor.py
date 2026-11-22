@@ -142,6 +142,7 @@ def test_yaml_schema_preserves_monitor_options() -> None:
         "enabled": True,
         "include_discovery_data": True,
         "debug_logging": False,
+        "notification_pause_hours": 0,
         "include_sources": "bluetooth, dhcp",
         "exclude_sources": "",
         "include_domains": "",
@@ -423,7 +424,9 @@ async def test_matching_ignore_rule_aborts_flow_but_still_logs() -> None:
         def __init__(self) -> None:
             self.recorded = False
 
-        def matching_rule(self, _device: Any, _device_type: Any) -> dict[str, Any]:
+        def matching_rule(
+            self, _device: Any, _device_type: Any, _model: Any = None
+        ) -> dict[str, Any]:
             return {"kind": "device"}
 
         async def async_record(self, **_kwargs: Any) -> str:

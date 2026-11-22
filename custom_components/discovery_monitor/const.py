@@ -12,6 +12,7 @@ CONF_INCLUDE_DOMAINS: Final = "include_domains"
 CONF_EXCLUDE_DOMAINS: Final = "exclude_domains"
 CONF_INCLUDE_DISCOVERY_DATA: Final = "include_discovery_data"
 CONF_DEBUG_LOGGING: Final = "debug_logging"
+CONF_NOTIFICATION_PAUSE_HOURS: Final = "notification_pause_hours"
 
 DEFAULT_OPTIONS: Final = {
     CONF_ENABLED: True,
@@ -21,4 +22,5 @@ DEFAULT_OPTIONS: Final = {
     CONF_EXCLUDE_DOMAINS: "",
     CONF_INCLUDE_DISCOVERY_DATA: True,
     CONF_DEBUG_LOGGING: False,
+    CONF_NOTIFICATION_PAUSE_HOURS: 0,
 }

@@ -74,13 +74,24 @@ test("live list, safe text rendering, search and mobile layout", async (t) => {
   assert.equal(await page.evaluate(() => window.panel.scrollWidth <= window.innerWidth), true);
 });
 
-for (const operation of ["dismiss", "device", "device_type"]) {
+for (const operation of ["dismiss", "device", "device_type", "model"]) {
   test(`confirmation, cancel and ${operation} action`, async (t) => {
     const page = await openPanel(t);
-    const index = ["dismiss", "device", "device_type"].indexOf(operation);
+    const index = ["dismiss", "device", "device_type", "model"].indexOf(operation);
+    if (operation === "model") {
+      await page.evaluate(() => {
+        window.snapshot.findings[0].model = "ThermoPro TP357S";
+        window.snapshot.findings[0].integration = "thermopro";
+        window.pushSnapshot(structuredClone(window.snapshot));
+      });
+      assert.match(await page.locator("#items button").last().innerText(), /ThermoPro TP357S/);
+    }
     await page.locator("#items button").nth(index).click();
     assert.equal(await page.locator("dialog").isVisible(), true);
     assert.equal(await page.locator("#confirm-title").innerText(), "Living room");
+    if (operation === "model") {
+      assert.match(await page.locator("#confirm-description").innerText(), /all reliably recognized devices of model ThermoPro TP357S in thermopro/);
+    }
     assert.deepEqual(await page.evaluate(() => window.calls), []);
     await page.locator("#cancel").click();
     assert.deepEqual(await page.evaluate(() => window.calls), []);
@@ -88,6 +99,7 @@ for (const operation of ["dismiss", "device", "device_type"]) {
     await page.locator("#confirm").click();
     assert.deepEqual(await page.evaluate(() => window.calls), [{
       type: "discovery_monitor/action", action: operation, target: "opaque-reference",
+      ...(operation === "model" ? { expected_model: "ThermoPro TP357S" } : {}),
     }]);
     await page.evaluate(() => {
       window.snapshot.findings = [];
