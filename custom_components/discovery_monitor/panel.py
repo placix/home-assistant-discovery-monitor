@@ -13,6 +13,7 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers.translation import async_get_translations
 
+from .bluetooth_models import MODEL, model_label
 from .const import DOMAIN
 from .identity import DEVICE, DEVICE_TYPE
 
@@ -92,6 +93,7 @@ def _snapshot(storage: DiscoveryStore) -> dict[str, Any]:
             "last_seen": finding.get("last_seen", ""),
             "can_ignore_device": isinstance(finding.get("device_criteria"), Mapping),
             "can_ignore_type": isinstance(finding.get("type_criteria"), Mapping),
+            "model": model_label(finding.get("model_criteria")),
         }
         for finding_id, finding in storage.visible_findings()
     ]
@@ -164,8 +166,11 @@ async def websocket_subscribe(
 @websocket_api.websocket_command(
     {
         vol.Required("type"): f"{DOMAIN}/action",
-        vol.Required("action"): vol.In(["dismiss", DEVICE, DEVICE_TYPE, "unignore"]),
+        vol.Required("action"): vol.In(
+            ["dismiss", DEVICE, DEVICE_TYPE, MODEL, "unignore"]
+        ),
         vol.Required("target"): str,
+        vol.Optional("expected_model"): str,
     }
 )
 @websocket_api.require_admin
@@ -186,7 +191,18 @@ async def websocket_action(
         success = await storage.async_remove_rule(target)
     else:
         finding = storage.findings.get(target)
-        if finding is None or not storage.is_finding_visible(finding):
+        if (
+            finding is None
+            or not storage.is_finding_visible(finding)
+            or (
+                action == MODEL
+                and (
+                    not msg.get("expected_model")
+                    or msg["expected_model"]
+                    != model_label(finding.get("model_criteria"))
+                )
+            )
+        ):
             connection.send_error(
                 msg["id"], "stale_target", "Discovery is no longer open"
             )

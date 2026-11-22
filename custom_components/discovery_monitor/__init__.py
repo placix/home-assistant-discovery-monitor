@@ -18,11 +18,13 @@ from .const import (
     CONF_INCLUDE_DISCOVERY_DATA,
     CONF_INCLUDE_DOMAINS,
     CONF_INCLUDE_SOURCES,
+    CONF_NOTIFICATION_PAUSE_HOURS,
     DEFAULT_OPTIONS,
     DOMAIN,
 )
 from .identity import device_criteria
 from .monitor import DiscoveryMonitor
+from .notifications import MAX_PAUSE_HOURS, NotificationHistory
 from .panel import async_setup_panel, async_unload_panel
 from .storage import DiscoveryStore
 
@@ -46,6 +48,9 @@ CONFIG_SCHEMA = vol.Schema(
                     CONF_DEBUG_LOGGING,
                     default=DEFAULT_OPTIONS[CONF_DEBUG_LOGGING],
                 ): cv.boolean,
+                vol.Optional(CONF_NOTIFICATION_PAUSE_HOURS, default=0): vol.All(
+                    vol.Coerce(int), vol.Range(min=0, max=MAX_PAUSE_HOURS)
+                ),
                 vol.Optional(
                     CONF_INCLUDE_SOURCES,
                     default=DEFAULT_OPTIONS[CONF_INCLUDE_SOURCES],
@@ -88,6 +93,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             hass, DEFAULT_OPTIONS | dict(entry.options)
         )
         monitor.config_entry_id = entry.entry_id
+    hass.data[DOMAIN].async_update_options(dict(entry.options))
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     await async_setup_panel(hass)
     return True
@@ -110,11 +117,14 @@ async def _async_start_monitor(
 ) -> DiscoveryMonitor:
     """Load storage before subscribing so no matching flow can slip through."""
     storage = None
+    notifications = None
     # HomeAssistant always has ``config``. Keeping the lightweight fallback makes
     # the monitor usable by compatibility/test hosts without filesystem storage.
     if hasattr(hass, "config"):
         storage = DiscoveryStore(hass)
         await storage.async_load()
+        notifications = NotificationHistory(hass)
+        await notifications.async_load()
         configured_devices = [
             criteria
             for entry in hass.config_entries.async_entries()
@@ -131,7 +141,7 @@ async def _async_start_monitor(
         ]
         await storage.async_resolve_configured_devices(configured_devices)
         _remove_legacy_discovery_issues(hass)
-    monitor = DiscoveryMonitor(hass, options, storage)
+    monitor = DiscoveryMonitor(hass, options, storage, notifications)
     hass.data[DOMAIN] = monitor
     monitor.async_start()
 
@@ -141,6 +151,12 @@ async def _async_start_monitor(
 
     hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, async_stop_monitor)
     return monitor
+
+
+async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Apply UI settings live, also when a YAML-owned monitor is running."""
+    if monitor := hass.data.get(DOMAIN):
+        monitor.async_update_options(dict(entry.options))
 
 
 @callback

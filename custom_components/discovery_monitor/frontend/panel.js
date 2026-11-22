@@ -244,6 +244,8 @@ class DiscoveryMonitorPanel extends HTMLElement {
       const fields = this._view === "findings"
         ? [["integration", item.integration], ["source", item.source], ["discoveries", item.count], ["last_seen", this._formatTime(item.last_seen)]]
         : [["panel_kind", this._t(item.kind)], ["integration", item.integration]];
+      if (item.model) fields.push(["model", item.model]);
+      if (item.kind === "model") fields.push(["model_scope_label", this._t("model_scope")]);
       for (const [key, value] of fields) {
         const pair = this._el("div");
         pair.append(this._el("dt", this._t(key)), this._el("dd", value || this._t("unknown")));
@@ -254,10 +256,11 @@ class DiscoveryMonitorPanel extends HTMLElement {
         ["dismiss", "dismiss_finding"],
         ...(item.can_ignore_device ? [["device", "ignore_device"]] : []),
         ...(item.can_ignore_type ? [["device_type", "ignore_device_type"]] : []),
+        ...(item.model ? [["model", "ignore_model"]] : []),
       ];
       for (const [action, text] of choices) {
-        const button = this._button(this._t(text), () => this._confirm(action, item),
-          action.startsWith("device") ? "ignore" : "");
+        const button = this._button(this._t(text).replace("{model}", item.model || ""), () => this._confirm(action, item),
+          action.startsWith("device") || action === "model" ? "ignore" : "");
         button._actionKey = `${item.id}:${action}`;
         button.disabled = this._busy;
         actions.append(button);
@@ -278,11 +281,11 @@ class DiscoveryMonitorPanel extends HTMLElement {
 
   _confirm(action, item) {
     if (this._busy) return;
-    const keys = { dismiss: "dismiss_finding", device: "ignore_device", device_type: "ignore_device_type", unignore: "panel_unignore" };
+    const keys = { dismiss: "dismiss_finding", device: "ignore_device", device_type: "ignore_device_type", model: "ignore_model", unignore: "panel_unignore" };
     this._selection = { action, item };
     this._q("confirm-title").textContent = item.name || this._t("finding");
-    this._q("confirm-description").textContent = this._t(`panel_confirm_${action}`);
-    this._q("confirm").textContent = this._t(keys[action]);
+    this._q("confirm-description").textContent = this._t(`panel_confirm_${action}`).replace("{model}", item.model || "").replace("{integration}", item.integration || "");
+    this._q("confirm").textContent = this._t(keys[action]).replace("{model}", item.model || "");
     this._q("cancel").textContent = this._t("panel_cancel");
     this.shadowRoot.querySelector("dialog").showModal();
     this._q("cancel").focus();
@@ -295,7 +298,8 @@ class DiscoveryMonitorPanel extends HTMLElement {
     this._status = "";
     this._render();
     try {
-      await this._hass.callWS({ type: "discovery_monitor/action", action, target: item.id });
+      await this._hass.callWS({ type: "discovery_monitor/action", action, target: item.id,
+        ...(action === "model" ? { expected_model: item.model } : {}) });
       this._status = this._t("panel_saved");
     } catch (error) {
       this._error = this._t(error?.code === "stale_target" ? "panel_stale" : "panel_action_failed");

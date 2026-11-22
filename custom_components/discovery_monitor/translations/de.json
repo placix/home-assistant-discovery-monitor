@@ -8,6 +8,11 @@
     }
   },
   "common": {
+    "model": "Modell",
+    "model_scope_label": "Reichweite",
+    "model_scope": "Alle erkannten Geräte dieses Modells innerhalb dieser Integration",
+    "ignore_model": "Alle Geräte des Modells {model} ignorieren",
+    "panel_confirm_model": "Alle sicher erkannten Geräte des Modells {model} in {integration} zukünftig ignorieren, auch mit anderen Bluetooth-Adressen. Der aktuelle Discovery-Flow dieses Funds wird beendet. Andere Modelle bleiben zugelassen.",
     "device": "Gerät",
     "device_type": "Gerätetyp",
     "integration": "Integration",
@@ -60,8 +65,22 @@
         "title": "Discovery Monitor",
         "menu_options": {
           "recent_findings": "Letzte Funde",
-          "ignored_items": "Ignorierte Geräte und Gerätetypen"
+          "ignored_items": "Ignorierte Geräte und Gerätetypen",
+          "notifications": "Benachrichtigungen und Diagnose"
         }
+      },
+      "notifications": {
+        "title": "Benachrichtigungen und Diagnose",
+        "description": "Die Pause gilt pro eindeutigem Fund, nicht für eine ganze Integration. 0 Stunden deaktiviert sie (Standard); maximal 720 Stunden (30 Tage). Sie beginnt beim letzten ausgelösten Event. Neue Adressen werden getrennt behandelt. Funde und Zähler laufen weiter, Discovery-Flows bleiben bestehen. Diagnose setzt zusätzlich DEBUG für custom_components.discovery_monitor voraus.",
+        "data": {
+          "notification_pause_hours": "Pause zwischen Meldungen desselben Funds (Stunden)",
+          "debug_logging": "Discovery-Entscheidungen im Debug-Log erklären",
+          "reset_pauses": "Gespeicherte Benachrichtigungspausen zurücksetzen"
+        }
+      },
+      "confirm_model": {
+        "title": "Modell ignorieren",
+        "description": "Alle sicher erkannten Geräte des Modells {model} in {integration} zukünftig ignorieren, auch mit anderen Bluetooth-Adressen. Der aktuelle Discovery-Flow dieses Funds wird beendet. Andere Modelle bleiben zugelassen."
       },
       "recent_findings": {
         "title": "Letzte Funde",

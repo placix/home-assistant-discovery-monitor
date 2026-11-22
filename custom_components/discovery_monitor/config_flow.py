@@ -15,8 +15,10 @@ from homeassistant.helpers.selector import (
 )
 from homeassistant.helpers.translation import async_get_translations
 
-from .const import DOMAIN
+from .bluetooth_models import MODEL, model_label
+from .const import CONF_DEBUG_LOGGING, CONF_NOTIFICATION_PAUSE_HOURS, DOMAIN
 from .identity import DEVICE, DEVICE_TYPE
+from .notifications import MAX_PAUSE_HOURS
 
 _DISMISS = "dismiss"
 
@@ -54,6 +56,7 @@ class DiscoveryOptionsFlow(config_entries.OptionsFlow):
     def __init__(self) -> None:
         """Initialize the options flow."""
         self._selected_finding_id: str | None = None
+        self._confirmed_model: str | None = None
 
     @property
     def _monitor(self) -> DiscoveryMonitor | None:
@@ -71,10 +74,10 @@ class DiscoveryOptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(
         self, _user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Show the two central management areas."""
+        """Show management areas and optional notification settings."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["recent_findings", "ignored_items"],
+            menu_options=["recent_findings", "ignored_items", "notifications"],
         )
 
     async def async_step_recent_findings(
@@ -117,7 +120,7 @@ class DiscoveryOptionsFlow(config_entries.OptionsFlow):
             data_schema=schema,
         )
 
-    async def async_step_finding_action(
+    async def async_step_finding_action(  # noqa: C901, PLR0911
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         """Offer only ignore actions backed by stable discovery criteria."""
@@ -136,10 +139,16 @@ class DiscoveryOptionsFlow(config_entries.OptionsFlow):
             choices[DEVICE] = texts["ignore_device"]
         if isinstance(finding.get("type_criteria"), Mapping):
             choices[DEVICE_TYPE] = texts["ignore_device_type"]
+        if model := model_label(finding.get("model_criteria")):
+            choices[MODEL] = texts["ignore_model"].format(model=model)
 
         if user_input is not None and isinstance(
             action := user_input.get("action"), str
         ):
+            if action not in choices:
+                return self.async_abort(reason="identity_unavailable")
+            if action == MODEL:
+                return await self.async_step_confirm_model()
             if action == _DISMISS:
                 if (
                     storage is None
@@ -166,6 +175,76 @@ class DiscoveryOptionsFlow(config_entries.OptionsFlow):
             step_id="finding_action",
             data_schema=vol.Schema({vol.Required("action"): vol.In(choices)}),
             description_placeholders={"name": str(finding.get("label", ""))},
+        )
+
+    async def async_step_confirm_model(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Require explicit confirmation of a rule covering an entire model."""
+        storage = self._storage
+        finding = (
+            storage.findings.get(self._selected_finding_id, {})
+            if storage is not None
+            else {}
+        )
+        model = model_label(finding.get("model_criteria"))
+        if model is None:
+            return self.async_abort(reason="identity_unavailable")
+        if user_input is not None:
+            if model != self._confirmed_model:
+                return self.async_abort(reason="identity_unavailable")
+            monitor = self._monitor
+            if (
+                monitor is None
+                or self._selected_finding_id is None
+                or not await monitor.async_ignore_finding(
+                    self._selected_finding_id, MODEL
+                )
+            ):
+                return self.async_abort(reason="identity_unavailable")
+            self._selected_finding_id = None
+            self._confirmed_model = None
+            return await self.async_step_recent_findings()
+        self._confirmed_model = model
+        return self.async_show_form(
+            step_id="confirm_model",
+            data_schema=vol.Schema({}),
+            description_placeholders={
+                "model": model,
+                "integration": str(finding.get("domain", "")),
+            },
+        )
+
+    async def async_step_notifications(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Configure bounded pauses separately from permanent ignore rules."""
+        monitor = self._monitor
+        if monitor is None:
+            return self.async_abort(reason="identity_unavailable")
+        if user_input is not None:
+            if user_input.get("reset_pauses") and monitor.notifications is not None:
+                await monitor.notifications.async_reset()
+            options = dict(self.config_entry.options) | {
+                key: user_input[key]
+                for key in (CONF_NOTIFICATION_PAUSE_HOURS, CONF_DEBUG_LOGGING)
+            }
+            return self.async_create_entry(data=options)
+        options = monitor.options
+        return self.async_show_form(
+            step_id="notifications",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_NOTIFICATION_PAUSE_HOURS,
+                        default=options[CONF_NOTIFICATION_PAUSE_HOURS],
+                    ): vol.All(vol.Coerce(int), vol.Range(min=0, max=MAX_PAUSE_HOURS)),
+                    vol.Required(
+                        CONF_DEBUG_LOGGING, default=options[CONF_DEBUG_LOGGING]
+                    ): bool,
+                    vol.Optional("reset_pauses", default=False): bool,
+                }
+            ),
         )
 
     async def async_step_ignored_items(
@@ -232,6 +311,9 @@ class DiscoveryOptionsFlow(config_entries.OptionsFlow):
             for key in (
                 "device",
                 "device_type",
+                "model",
+                "model_scope",
+                "ignore_model",
                 "integration",
                 "source",
                 "discoveries",
@@ -262,11 +344,12 @@ def _finding_label(finding: Mapping[str, Any], texts: Mapping[str, str]) -> str:
 def _rule_label(rule: Mapping[str, Any], texts: Mapping[str, str]) -> str:
     """Return a readable ignore-rule label without exposing its identity."""
     label = str(rule.get("label") or texts["device"])
-    kind = texts["device"] if rule.get("kind") == DEVICE else texts["device_type"]
+    kind = texts.get(str(rule.get("kind")), texts["device_type"])
     criteria = rule.get("criteria")
     domain = criteria.get("domain") if isinstance(criteria, Mapping) else None
     integration = f" · {texts['integration']}: {domain}" if domain else ""
-    return f"{label} — {kind}{integration}"
+    scope = f" · {texts['model_scope']}" if rule.get("kind") == MODEL else ""
+    return f"{label} — {kind}{integration}{scope}"
 
 
 def _supported_language(value: Any) -> str:

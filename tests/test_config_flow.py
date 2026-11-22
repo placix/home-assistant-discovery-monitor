@@ -11,6 +11,7 @@ from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers.selector import SelectSelector
 
 from custom_components.discovery_monitor import config_flow as config_flow_module
+from custom_components.discovery_monitor.bluetooth_models import detect_model
 from custom_components.discovery_monitor.config_flow import DiscoveryOptionsFlow
 from custom_components.discovery_monitor.const import DOMAIN
 from custom_components.discovery_monitor.identity import (
@@ -18,6 +19,9 @@ from custom_components.discovery_monitor.identity import (
     DEVICE_TYPE,
     criteria_match,
 )
+
+from .test_bluetooth_models import THERMOPRO
+from .test_storage import make_store
 
 
 class FakeStorage:
@@ -152,6 +156,86 @@ def make_flow(language: str = "en") -> tuple[DiscoveryOptionsFlow, Any, FakeStor
     return flow, monitor, storage
 
 
+@pytest.mark.parametrize("language", ["en", "de", "fr"])
+async def test_model_action_has_explicit_confirmation_and_scope(language: str) -> None:
+    flow, monitor, _ = make_flow(language)
+    storage = monitor.storage = make_store()
+    fid = await storage.async_record(
+        domain="thermopro",
+        source="bluetooth",
+        label="Room sensor",
+        device={"domain": "thermopro", "unique_id": "private-id"},
+        device_type=None,
+        fallback={},
+        flow_id="private-flow",
+        model=detect_model("thermopro", "bluetooth", THERMOPRO).criteria,
+    )
+    monitor.async_ignore_finding = AsyncMock(side_effect=storage.async_add_rule)
+    result = await flow.async_step_recent_findings({"finding": fid})
+    labels = matching_rule_labels(result)
+    assert "ThermoPro TP357S" in labels
+    assert (
+        "Alle Geräte des Modells" if language == "de" else "Ignore all devices of model"
+    ) in labels
+    confirmation = await flow.async_step_finding_action({"action": "model"})
+    assert confirmation["step_id"] == "confirm_model"
+    assert confirmation["description_placeholders"] == {
+        "model": "ThermoPro TP357S",
+        "integration": "thermopro",
+    }
+    assert not storage.rules
+    result = await flow.async_step_confirm_model({})
+    assert result["step_id"] == "recent_findings"
+    assert result["data_schema"].schema == {}
+    rules = selector_labels(await flow.async_step_ignored_items())
+    assert "ThermoPro TP357S" in rules
+    assert (
+        "Alle erkannten Geräte" if language == "de" else "All recognized devices"
+    ) in rules
+    assert "private-id" not in rules
+
+
+async def test_unrecognized_model_cannot_be_submitted() -> None:
+    flow, monitor, _ = make_flow()
+    await flow.async_step_recent_findings({"finding": "private-fingerprint"})
+    result = await flow.async_step_finding_action({"action": "model"})
+    assert result["type"] is FlowResultType.ABORT
+    monitor.async_ignore_finding.assert_not_awaited()
+
+
+async def test_model_confirmation_rejects_changed_evidence() -> None:
+    flow, monitor, storage = make_flow()
+    finding = storage.findings["private-fingerprint"]
+    finding["model_criteria"] = detect_model(
+        "thermopro", "bluetooth", THERMOPRO
+    ).criteria
+    await flow.async_step_recent_findings({"finding": "private-fingerprint"})
+    await flow.async_step_finding_action({"action": "model"})
+    finding["model_criteria"] = None
+    result = await flow.async_step_confirm_model({})
+    assert result["type"] is FlowResultType.ABORT
+    monitor.async_ignore_finding.assert_not_awaited()
+
+
+async def test_notification_options_default_disabled_and_reset_is_explicit() -> None:
+    flow, monitor, _ = make_flow()
+    monitor.options = {"notification_pause_hours": 0, "debug_logging": False}
+    monitor.notifications = SimpleNamespace(async_reset=AsyncMock())
+    result = await flow.async_step_notifications()
+    defaults = result["data_schema"]({})
+    assert defaults == {
+        "notification_pause_hours": 0,
+        "debug_logging": False,
+        "reset_pauses": False,
+    }
+    monitor.notifications.async_reset.assert_not_awaited()
+    result = await flow.async_step_notifications(
+        defaults | {"notification_pause_hours": 24, "reset_pauses": True}
+    )
+    assert result["data"] == {"notification_pause_hours": 24, "debug_logging": False}
+    monitor.notifications.async_reset.assert_awaited_once()
+
+
 def selector_labels(form: dict[str, Any]) -> str:
     selector = next(iter(form["data_schema"].schema.values()))
     return " ".join(option["label"] for option in selector.config["options"])
@@ -169,7 +253,11 @@ async def test_options_start_page_is_management_menu() -> None:
     result = await flow.async_step_init()
 
     assert result["type"] is FlowResultType.MENU
-    assert result["menu_options"] == ["recent_findings", "ignored_items"]
+    assert result["menu_options"] == [
+        "recent_findings",
+        "ignored_items",
+        "notifications",
+    ]
 
 
 @pytest.mark.asyncio
